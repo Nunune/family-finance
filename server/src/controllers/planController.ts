@@ -40,6 +40,11 @@ function getDueDateInMonth(item: any, year: number, month: number): Date | null 
   return null
 }
 
+function autoIsDueSoon(dueDate: Date, today: Date, remindDays = 3) {
+  const diff = Math.ceil((dueDate.getTime() - today.getTime()) / 86400000)
+  return diff >= 0 && diff <= remindDays
+}
+
 export async function getPlanItems(req: AuthRequest, res: Response) {
   try {
     const userId = req.userId!
@@ -50,47 +55,91 @@ export async function getPlanItems(req: AuthRequest, res: Response) {
     const monthStart = new Date(year, mon - 1, 1)
     const monthEnd = new Date(year, mon, 0, 23, 59, 59, 999)
 
-    const items = await db.planItem.findMany({
-      where: {
-        userId,
-        isActive: true,
-        OR: [
-          { frequency: { in: ['MONTHLY', 'WEEKLY'] } },
-          { frequency: 'ONCE', dueDate: { gte: monthStart, lte: monthEnd } },
-        ],
-      },
-      include: {
-        category: { select: { id: true, name: true, icon: true, color: true } },
-        completions: { where: { periodKey: { startsWith: month as string } } },
-      },
-      orderBy: { createdAt: 'asc' },
-    })
+    const [items, debts, huis] = await Promise.all([
+      db.planItem.findMany({
+        where: {
+          userId,
+          isActive: true,
+          OR: [
+            { frequency: { in: ['MONTHLY', 'WEEKLY'] } },
+            { frequency: 'ONCE', dueDate: { gte: monthStart, lte: monthEnd } },
+          ],
+        },
+        include: {
+          category: { select: { id: true, name: true, icon: true, color: true } },
+          completions: { where: { periodKey: { startsWith: month as string } } },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      db.debt.findMany({
+        where: { ownerId: userId, remainingAmount: { gt: 0 }, dueDate: { gte: monthStart, lte: monthEnd } },
+      }),
+      db.hui.findMany({
+        where: { userId },
+        include: { rounds: { where: { dueDate: { gte: monthStart, lte: monthEnd } } } },
+      }),
+    ])
 
     const today = new Date()
+
     const result = items.map((item: any) => {
       const dueDate = getDueDateInMonth(item, year, mon)
       const periodKey = getPeriodKey(item, year, mon)
       const completion = item.completions[0] ?? null
       const isDone = completion?.isDone ?? false
-
       let isDueSoon = false
       if (!isDone && dueDate) {
         const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / 86400000)
         isDueSoon = diffDays >= 0 && diffDays <= item.remindDays
       }
+      return { ...item, completions: undefined, dueDate: dueDate?.toISOString() ?? null, periodKey, isDone, doneAt: completion?.doneAt ?? null, isDueSoon }
+    })
 
+    // Auto items from debts
+    const debtItems = debts.map((d: any) => {
+      const dueDate = new Date(d.dueDate)
       return {
-        ...item,
-        completions: undefined,
-        dueDate: dueDate?.toISOString() ?? null,
-        periodKey,
-        isDone,
-        doneAt: completion?.doneAt ?? null,
-        isDueSoon,
+        id: `auto_debt_${d.id}`,
+        isAuto: true, sourceType: 'DEBT', sourceId: d.id,
+        title: d.title,
+        amount: d.remainingAmount,
+        type: 'EXPENSE',
+        frequency: 'ONCE',
+        dueDate: dueDate.toISOString(),
+        periodKey: dueDate.toISOString().slice(0, 10),
+        isDone: false,
+        isDueSoon: autoIsDueSoon(dueDate, today),
+        doneAt: null, note: null, categoryId: null, category: null, remindDays: 3, isActive: true,
       }
     })
 
-    res.json(result)
+    // Auto items from hui rounds
+    const huiItems: any[] = []
+    for (const hui of huis as any[]) {
+      for (const round of hui.rounds) {
+        const isMyRound = round.roundNo === hui.myRound
+        const isDone = isMyRound ? round.isReceived : round.isPaid
+        const amount = isMyRound
+          ? hui.amount * hui.totalRounds - (hui.organizerFee ?? 0)
+          : (round.bidAmount ?? hui.amount)
+        const dueDate = new Date(round.dueDate)
+        huiItems.push({
+          id: `auto_hui_${round.id}`,
+          isAuto: true, sourceType: 'HUI', sourceId: hui.id,
+          title: `${hui.name} — Kỳ ${round.roundNo}${isMyRound ? ' (hốt)' : ''}`,
+          amount,
+          type: isMyRound ? 'INCOME' : 'EXPENSE',
+          frequency: 'ONCE',
+          dueDate: dueDate.toISOString(),
+          periodKey: dueDate.toISOString().slice(0, 10),
+          isDone,
+          isDueSoon: !isDone && autoIsDueSoon(dueDate, today),
+          doneAt: null, note: null, categoryId: null, category: null, remindDays: 3, isActive: true,
+        })
+      }
+    }
+
+    res.json([...result, ...debtItems, ...huiItems])
   } catch (err) {
     console.error('[getPlanItems]', err)
     res.status(500).json({ error: 'Lỗi server' })
@@ -205,16 +254,29 @@ export async function getUpcomingReminders(req: AuthRequest, res: Response) {
     const today = new Date()
     const year = today.getFullYear()
     const month = today.getMonth() + 1
+    const monthStart = new Date(year, month - 1, 1)
+    const monthEnd = new Date(year, month, 0, 23, 59, 59, 999)
+    const REMIND_DAYS = 7
 
-    const items = await db.planItem.findMany({
-      where: { userId, isActive: true },
-      include: {
-        category: { select: { id: true, name: true, icon: true, color: true } },
-        completions: { where: { periodKey: { startsWith: `${year}-${String(month).padStart(2, '0')}` } } },
-      },
-    })
+    const [items, debts, huis] = await Promise.all([
+      db.planItem.findMany({
+        where: { userId, isActive: true },
+        include: {
+          category: { select: { id: true, name: true, icon: true, color: true } },
+          completions: { where: { periodKey: { startsWith: `${year}-${String(month).padStart(2, '0')}` } } },
+        },
+      }),
+      db.debt.findMany({
+        where: { ownerId: userId, remainingAmount: { gt: 0 }, dueDate: { gte: today, lte: monthEnd } },
+      }),
+      db.hui.findMany({
+        where: { userId },
+        include: { rounds: { where: { dueDate: { gte: today, lte: monthEnd }, isPaid: false, isReceived: false } } },
+      }),
+    ])
 
     const reminders: any[] = []
+
     for (const item of items) {
       const dueDate = getDueDateInMonth(item, year, month)
       if (!dueDate) continue
@@ -223,6 +285,35 @@ export async function getUpcomingReminders(req: AuthRequest, res: Response) {
       const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / 86400000)
       if (diffDays >= 0 && diffDays <= item.remindDays) {
         reminders.push({ ...item, completions: undefined, dueDate: dueDate.toISOString(), diffDays })
+      }
+    }
+
+    for (const d of debts as any[]) {
+      const dueDate = new Date(d.dueDate)
+      const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / 86400000)
+      if (diffDays >= 0 && diffDays <= REMIND_DAYS) {
+        reminders.push({
+          id: `auto_debt_${d.id}`, isAuto: true, sourceType: 'DEBT', sourceId: d.id,
+          title: d.title, amount: d.remainingAmount, type: 'EXPENSE',
+          dueDate: dueDate.toISOString(), diffDays,
+        })
+      }
+    }
+
+    for (const hui of huis as any[]) {
+      for (const round of hui.rounds) {
+        const dueDate = new Date(round.dueDate)
+        const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / 86400000)
+        if (diffDays >= 0 && diffDays <= REMIND_DAYS) {
+          const isMyRound = round.roundNo === hui.myRound
+          reminders.push({
+            id: `auto_hui_${round.id}`, isAuto: true, sourceType: 'HUI', sourceId: hui.id,
+            title: `${hui.name} — Kỳ ${round.roundNo}${isMyRound ? ' (hốt)' : ''}`,
+            amount: isMyRound ? hui.amount * hui.totalRounds - (hui.organizerFee ?? 0) : (round.bidAmount ?? hui.amount),
+            type: isMyRound ? 'INCOME' : 'EXPENSE',
+            dueDate: dueDate.toISOString(), diffDays,
+          })
+        }
       }
     }
 

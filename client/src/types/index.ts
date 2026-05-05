@@ -247,14 +247,18 @@ export interface PlanItem {
   dueDate?: string | null
   remindDays: number
   isActive: boolean
-  userId: string
+  userId?: string
   // enriched by API for a given month:
   periodKey?: string
   isDone?: boolean
   doneAt?: string | null
   isDueSoon?: boolean
-  createdAt: string
-  updatedAt: string
+  createdAt?: string
+  updatedAt?: string
+  // auto-derived items (from Debt / Hui)
+  isAuto?: boolean
+  sourceType?: 'DEBT' | 'HUI'
+  sourceId?: string
 }
 
 // ─── Weekly Budgets ─────────────────────────────────────────────────────────

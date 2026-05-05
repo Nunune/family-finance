@@ -192,6 +192,11 @@ export default function PlanItemList() {
   )
 }
 
+function AutoBadge({ type }: { type: 'DEBT' | 'HUI' }) {
+  if (type === 'DEBT') return <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full shrink-0">Nợ</span>
+  return <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full shrink-0">Hụi</span>
+}
+
 function PlanItemRow({
   item,
   onToggle,
@@ -204,23 +209,29 @@ function PlanItemRow({
   onDelete: (id: string) => void
 }) {
   const isIncome = item.type === 'INCOME'
+  const isAuto = item.isAuto
+
   return (
     <div className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
-      item.isDone ? 'bg-gray-50 border-gray-100 opacity-60' : item.isDueSoon ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100'
+      item.isDone ? 'bg-gray-50 border-gray-100 opacity-60'
+      : item.isDueSoon ? 'bg-amber-50 border-amber-200'
+      : isAuto ? 'bg-gray-50/60 border-gray-100 border-dashed'
+      : 'bg-white border-gray-100'
     }`}>
-      {/* Checkbox */}
-      <button
-        onClick={() => onToggle(item)}
-        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-          item.isDone ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300 hover:border-emerald-400'
-        }`}
+      {/* Checkbox — read-only for auto items */}
+      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
+        item.isDone ? 'bg-emerald-500 border-emerald-500 text-white'
+        : isAuto ? 'border-gray-200 bg-gray-100'
+        : 'border-gray-300'
+      } ${!isAuto ? 'cursor-pointer hover:border-emerald-400' : ''}`}
+        onClick={() => !isAuto && onToggle(item)}
       >
         {item.isDone && <span className="text-[10px]">✓</span>}
-      </button>
+      </div>
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {item.category && <span className="text-sm">{item.category.icon}</span>}
           <p className={`text-sm font-medium truncate ${item.isDone ? 'line-through text-gray-400' : 'text-gray-700'}`}>
             {item.title}
@@ -228,10 +239,13 @@ function PlanItemRow({
           {item.isDueSoon && !item.isDone && (
             <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full shrink-0">Sắp đến!</span>
           )}
+          {isAuto && item.sourceType && <AutoBadge type={item.sourceType} />}
         </div>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-[10px] text-gray-400">{dueDateLabel(item)}</span>
-          {freqBadge(item.frequency)}
+          <span className="text-[10px] text-gray-400">
+            {item.dueDate ? (() => { const d = new Date(item.dueDate); return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}` })() : dueDateLabel(item)}
+          </span>
+          {!isAuto && freqBadge(item.frequency)}
         </div>
       </div>
 
@@ -240,11 +254,13 @@ function PlanItemRow({
         {isIncome ? '+' : '-'}{fmtFull(item.amount)}
       </p>
 
-      {/* Actions */}
-      <div className="flex gap-1 shrink-0">
-        <button onClick={() => onEdit(item)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 text-sm">✏️</button>
-        <button onClick={() => onDelete(item.id)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-50 text-gray-400 text-sm">🗑️</button>
-      </div>
+      {/* Actions — hidden for auto items */}
+      {!isAuto && (
+        <div className="flex gap-1 shrink-0">
+          <button onClick={() => onEdit(item)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 text-sm">✏️</button>
+          <button onClick={() => onDelete(item.id)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-50 text-gray-400 text-sm">🗑️</button>
+        </div>
+      )}
     </div>
   )
 }
