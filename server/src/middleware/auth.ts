@@ -27,20 +27,21 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       tokenVersion?: number
     }
 
-    // Validate tokenVersion if present — catches logoutAll revocations
-    if (payload.tokenVersion !== undefined) {
-      const user = await prisma.user.findUnique({
-        where: { id: payload.userId },
-        select: { tokenVersion: true },
-      })
-      if (!user || user.tokenVersion !== payload.tokenVersion) {
-        return res.status(401).json({ error: 'Phiên đăng nhập đã hết hạn' })
-      }
+    // Always read role + familyId from DB so promotions/changes take effect without re-login
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { role: true, familyId: true, tokenVersion: true },
+    })
+    if (!user) return res.status(401).json({ error: 'Tài khoản không tồn tại' })
+
+    // Validate tokenVersion — catches logoutAll revocations
+    if (payload.tokenVersion !== undefined && user.tokenVersion !== payload.tokenVersion) {
+      return res.status(401).json({ error: 'Phiên đăng nhập đã hết hạn' })
     }
 
     req.userId = payload.userId
-    req.userRole = payload.role
-    req.familyId = payload.familyId
+    req.userRole = user.role
+    req.familyId = user.familyId ?? payload.familyId
     next()
   } catch {
     res.status(401).json({ error: 'Token không hợp lệ' })
