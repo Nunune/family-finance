@@ -397,3 +397,109 @@ export async function getFamilyInfo(req: AuthRequest, res: Response) {
     res.status(500).json({ error: 'Lỗi server' })
   }
 }
+
+export async function getFamilyReport(req: AuthRequest, res: Response) {
+  try {
+    if (!req.familyId) return res.status(403).json({ error: 'Cần có gia đình' })
+
+    const monthParam = (req.query.month as string) ?? new Date().toISOString().slice(0, 7) // "2026-05"
+    const [y, m] = monthParam.split('-').map(Number)
+    const startDate = new Date(y, m - 1, 1)
+    const endDate = new Date(y, m, 1)
+
+    // Family members
+    const family = await prisma.family.findUnique({
+      where: { id: req.familyId },
+      include: { members: { select: { id: true, name: true } } },
+    })
+    if (!family) return res.status(404).json({ error: 'Không tìm thấy gia đình' })
+
+    // Personal wallets for each member
+    const memberWallets = await prisma.wallet.findMany({
+      where: { userId: { in: family.members.map(m => m.id) } },
+      select: { id: true, userId: true },
+    })
+    const walletUserMap: Record<string, string> = {}
+    memberWallets.forEach(w => { if (w.userId) walletUserMap[w.id] = w.userId })
+
+    // Shared wallet
+    const sharedWallet = await prisma.wallet.findFirst({ where: { familyId: req.familyId }, select: { id: true } })
+
+    // Sub-fund wallets
+    const subFunds = await (prisma as any).subFund.findMany({
+      where: { familyId: req.familyId },
+      include: { wallet: { select: { id: true } } },
+    })
+
+    const allWalletIds = [
+      ...memberWallets.map(w => w.id),
+      ...(sharedWallet ? [sharedWallet.id] : []),
+      ...subFunds.filter((s: any) => s.wallet).map((s: any) => s.wallet.id),
+    ]
+
+    // All transactions for the month across all wallets
+    const txs = await prisma.transaction.findMany({
+      where: {
+        walletId: { in: allWalletIds },
+        date: { gte: startDate, lt: endDate },
+        deletedAt: null,
+      },
+      include: { category: { select: { name: true, icon: true, color: true } } },
+    })
+
+    // Per-member personal stats
+    const memberStats = family.members.map(member => {
+      const wallet = memberWallets.find(w => w.userId === member.id)
+      const memberTxs = wallet ? txs.filter(t => t.walletId === wallet.id) : []
+      return {
+        userId: member.id,
+        name: member.name,
+        personalIncome: memberTxs.filter(t => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0),
+        personalExpense: memberTxs.filter(t => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0),
+      }
+    })
+
+    // Shared wallet stats
+    const sharedTxs = sharedWallet ? txs.filter(t => t.walletId === sharedWallet.id) : []
+    const shared = {
+      income: sharedTxs.filter(t => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0),
+      expense: sharedTxs.filter(t => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0),
+    }
+
+    // Sub-fund stats
+    const subFundStats = subFunds.map((sf: any) => {
+      const sfTxs = sf.wallet ? txs.filter((t: any) => t.walletId === sf.wallet.id) : []
+      return {
+        id: sf.id,
+        name: sf.name,
+        icon: sf.icon,
+        income: sfTxs.filter((t: any) => t.type === 'INCOME').reduce((s: number, t: any) => s + t.amount, 0),
+        expense: sfTxs.filter((t: any) => t.type === 'EXPENSE').reduce((s: number, t: any) => s + t.amount, 0),
+      }
+    })
+
+    // Category breakdown (all wallets, exclude transfers)
+    const catMap: Record<string, { name: string; icon: string; color: string; amount: number }> = {}
+    txs.filter(t => t.type === 'EXPENSE' && !(t as any).transferGroupId).forEach(t => {
+      const key = t.categoryId
+      if (!catMap[key]) catMap[key] = { name: t.category.name, icon: t.category.icon, color: t.category.color, amount: 0 }
+      catMap[key].amount += t.amount
+    })
+    const categoryBreakdown = Object.values(catMap).sort((a, b) => b.amount - a.amount)
+
+    const totalIncome = memberStats.reduce((s, m) => s + m.personalIncome, 0) + shared.income
+    const totalExpense = memberStats.reduce((s, m) => s + m.personalExpense, 0) + shared.expense
+
+    res.json({
+      month: monthParam,
+      members: memberStats,
+      shared,
+      subFunds: subFundStats,
+      grandTotal: { income: totalIncome, expense: totalExpense, net: totalIncome - totalExpense },
+      categoryBreakdown,
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Lỗi server' })
+  }
+}

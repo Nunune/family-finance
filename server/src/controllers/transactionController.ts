@@ -298,6 +298,19 @@ export async function deleteTransaction(req: AuthRequest, res: Response) {
         },
       })
 
+      // Cascade: if this tx is one side of a transfer, soft-delete the other side too
+      if (existing.transferGroupId) {
+        const partner = await (tx as any).transaction.findFirst({
+          where: { transferGroupId: existing.transferGroupId, id: { not: id }, deletedAt: null },
+        })
+        if (partner) {
+          await (tx as any).transaction.update({
+            where: { id: partner.id },
+            data: { deletedAt: new Date(), pocketId: null },
+          })
+        }
+      }
+
       // Cascade: if this tx was linked to a Debt creation, delete the debt
       const linkedDebt = await (tx as any).debt.findFirst({ where: { walletTransactionId: id } })
       if (linkedDebt) {

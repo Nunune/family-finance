@@ -173,7 +173,12 @@ export default function TransactionList({ transactions, onEdit, onDelete, showUs
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-medium text-gray-800 truncate">{t.category.name}</span>
+                            <span className="text-sm font-medium text-gray-800 truncate">
+                              {t.transferGroupId ? 'Chuyển khoản' : t.category.name}
+                            </span>
+                            {t.transferGroupId && (
+                              <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full">↔</span>
+                            )}
                             {showUser && (
                               <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">{t.user.name}</span>
                             )}

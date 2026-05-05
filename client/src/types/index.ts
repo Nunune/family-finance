@@ -52,8 +52,18 @@ export interface Transaction {
   walletId: string
   pocketId?: string | null
   pocket?: WalletPocket | null
+  transferGroupId?: string | null
   logs?: TransactionLog[]
   createdAt: string
+}
+
+// ─── Transfer ───────────────────────────────────────────────────────────────
+
+export interface TransferWallet {
+  key: string
+  label: string
+  walletType: 'PERSONAL' | 'SHARED' | 'SUBFUND'
+  subFundId?: string
 }
 
 export interface Summary {
@@ -282,6 +292,46 @@ export interface WeeklySummary {
   topCategories: WeeklyCategorySummary[]
   projectedWeek: number
   daysElapsed: number
+}
+
+// ─── Hụi ────────────────────────────────────────────────────────────────────
+
+export interface HuiRound {
+  id: string
+  huiId: string
+  roundNo: number
+  ownerName?: string | null
+  dueDate: string
+  isPaid: boolean
+  isReceived: boolean
+  paidAt?: string | null
+  createdAt: string
+}
+
+export interface Hui {
+  id: string
+  name: string
+  amount: number
+  totalRounds: number
+  myRound: number
+  startDate: string
+  frequency: 'MONTHLY' | 'WEEKLY'
+  status: 'ACTIVE' | 'COMPLETED'
+  userId: string
+  rounds: HuiRound[]
+  createdAt: string
+  updatedAt: string
+}
+
+// ─── Family Report ───────────────────────────────────────────────────────────
+
+export interface FamilyReport {
+  month: string
+  members: { userId: string; name: string; personalIncome: number; personalExpense: number }[]
+  shared: { income: number; expense: number }
+  subFunds: { id: string; name: string; icon: string; income: number; expense: number }[]
+  grandTotal: { income: number; expense: number; net: number }
+  categoryBreakdown: { name: string; icon: string; color: string; amount: number }[]
 }
 
 export interface TransactionProposal {

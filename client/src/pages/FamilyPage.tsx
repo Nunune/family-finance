@@ -5,6 +5,7 @@ import api from '../services/api'
 import { Family, SubFund } from '../types'
 import FamilySetup from '../components/Family/FamilySetup'
 import SubFundManager from '../components/Family/SubFundManager'
+import FamilyReport from '../components/Family/FamilyReport'
 import { format } from 'date-fns'
 import { vi } from 'date-fns/locale'
 
@@ -29,6 +30,7 @@ export default function FamilyPage() {
   const [newInvite, setNewInvite] = useState<Invite | null>(null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [activeTab, setActiveTab] = useState<'info' | 'report' | 'funds'>('info')
 
   const loadFamily = useCallback(() => {
     if (!user?.familyId) return
@@ -101,9 +103,37 @@ export default function FamilyPage() {
 
   return (
     <div className="max-w-xl mx-auto px-4 py-6 space-y-5">
-      <h1 className="text-xl font-bold text-gray-800">👨‍👩‍👧‍👦 Gia đình</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-gray-800">👨‍👩‍👧‍👦 Gia đình</h1>
+      </div>
 
-      {family && (
+      {/* Tab strip */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+        {([
+          { key: 'info', label: '👥 Thành viên' },
+          { key: 'report', label: '📊 Báo cáo' },
+          { key: 'funds', label: '📂 Quỹ phụ' },
+        ] as const).map(t => (
+          <button key={t.key} onClick={() => setActiveTab(t.key)}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${activeTab === t.key ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'report' && <FamilyReport />}
+
+      {activeTab === 'funds' && family && (
+        <SubFundManager
+          funds={subFunds}
+          familyMembers={family.members}
+          isAdmin={user?.role === 'ADMIN'}
+          currentUserId={user!.id}
+          onChange={setSubFunds}
+        />
+      )}
+
+      {activeTab === 'info' && family && (
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <h2 className="text-lg font-bold text-gray-800 mb-1">{family.name}</h2>
           <p className="text-sm text-gray-500 mb-4">{family.members.length}/5 thành viên</p>
@@ -127,7 +157,7 @@ export default function FamilyPage() {
         </div>
       )}
 
-      {user.role === 'ADMIN' && (
+      {activeTab === 'info' && user.role === 'ADMIN' && (
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-gray-800">Mời thành viên</h3>
@@ -220,7 +250,7 @@ export default function FamilyPage() {
         </div>
       )}
 
-      {user.role === 'ADMIN' && (
+      {activeTab === 'info' && user.role === 'ADMIN' && (
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <h3 className="font-semibold text-gray-800 mb-1">Sao lưu dữ liệu</h3>
           <p className="text-xs text-gray-500 mb-3">
@@ -237,25 +267,15 @@ export default function FamilyPage() {
         </div>
       )}
 
-      {family && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <SubFundManager
-            funds={subFunds}
-            familyMembers={family.members}
-            isAdmin={user?.role === 'ADMIN'}
-            currentUserId={user!.id}
-            onChange={setSubFunds}
-          />
+      {activeTab === 'info' && (
+        <div className="bg-amber-50 rounded-2xl border border-amber-100 p-4 flex gap-2">
+          <span className="text-amber-500 flex-shrink-0">🔒</span>
+          <div className="text-xs text-amber-700 space-y-1">
+            <p>Ví cá nhân của mỗi thành viên hoàn toàn riêng tư — kể cả Admin không xem được.</p>
+            <p>Tham gia gia đình cần cả mã mời lẫn mã cá nhân do Admin thiết lập riêng cho bạn.</p>
+          </div>
         </div>
       )}
-
-      <div className="bg-amber-50 rounded-2xl border border-amber-100 p-4 flex gap-2">
-        <span className="text-amber-500 flex-shrink-0">🔒</span>
-        <div className="text-xs text-amber-700 space-y-1">
-          <p>Ví cá nhân của mỗi thành viên hoàn toàn riêng tư — kể cả Admin không xem được.</p>
-          <p>Tham gia gia đình cần cả mã mời lẫn mã cá nhân do Admin thiết lập riêng cho bạn.</p>
-        </div>
-      </div>
     </div>
   )
 }

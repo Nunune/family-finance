@@ -14,6 +14,8 @@ import pocketRoutes from './routes/pockets'
 import budgetRoutes from './routes/budgets'
 import planItemRoutes from './routes/planItems'
 import subFundRoutes from './routes/subFunds'
+import transferRoutes from './routes/transfers'
+import huiRoutes from './routes/hui'
 import { setupSocket } from './socket/handlers'
 import { authLimiter, apiLimiter } from './middleware/rateLimit'
 import { runRecurringScheduler } from './controllers/recurringController'
@@ -46,6 +48,8 @@ app.use('/api/pockets', apiLimiter, pocketRoutes)
 app.use('/api/budgets', apiLimiter, budgetRoutes)
 app.use('/api/plan-items', apiLimiter, planItemRoutes)
 app.use('/api/sub-funds', apiLimiter, subFundRoutes)
+app.use('/api/transfers', apiLimiter, transferRoutes)
+app.use('/api/hui', apiLimiter, huiRoutes)
 
 // Serve React client in production
 const clientDist = path.join(__dirname, '../../client/dist')

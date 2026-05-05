@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Debt, RecurringTransaction, TransactionProposal, FamilyMember, SavingsGoal } from '../types'
+import { Debt, RecurringTransaction, TransactionProposal, FamilyMember, SavingsGoal, Hui } from '../types'
 import { useAuth } from '../contexts/AuthContext'
 import api from '../services/api'
 import DebtList from '../components/Debt/DebtList'
@@ -10,8 +10,10 @@ import ProposalCard from '../components/Recurring/ProposalCard'
 import SavingsGoalList from '../components/Savings/SavingsGoalList'
 import SavingsGoalForm from '../components/Savings/SavingsGoalForm'
 import PlanItemList from '../components/Plan/PlanItemList'
+import HuiList from '../components/Hui/HuiList'
+import HuiForm from '../components/Hui/HuiForm'
 
-type Tab = 'debts' | 'recurring' | 'proposals' | 'savings' | 'forecast'
+type Tab = 'debts' | 'recurring' | 'proposals' | 'savings' | 'forecast' | 'hui'
 
 export default function PlansPage() {
   const { user } = useAuth()
@@ -23,6 +25,8 @@ export default function PlansPage() {
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([])
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | undefined>()
+  const [huis, setHuis] = useState<Hui[]>([])
+  const [showHuiForm, setShowHuiForm] = useState(false)
 
   const [showDebtForm, setShowDebtForm] = useState(false)
   const [showRecurringForm, setShowRecurringForm] = useState(false)
@@ -33,16 +37,18 @@ export default function PlansPage() {
     async function load() {
       setLoading(true)
       try {
-        const [dRes, rRes, pRes, sRes] = await Promise.all([
+        const [dRes, rRes, pRes, sRes, hRes] = await Promise.all([
           api.get('/debts'),
           api.get('/recurring'),
           api.get('/recurring/proposals'),
           api.get('/savings'),
+          api.get('/hui'),
         ])
         setDebts(dRes.data)
         setRecurrings(rRes.data)
         setProposals(pRes.data)
         setSavingsGoals(sRes.data)
+        setHuis(hRes.data)
 
         if (user?.familyId) {
           const fRes = await api.get('/auth/family')
@@ -60,6 +66,7 @@ export default function PlansPage() {
   const tabs: { key: Tab; label: string; badge?: number }[] = [
     { key: 'forecast', label: '📅 Dự thu/chi' },
     { key: 'savings', label: '🎯 Quỹ' },
+    { key: 'hui', label: '🔄 Hụi' },
     { key: 'debts', label: 'Nợ & Vay' },
     { key: 'recurring', label: 'Định kỳ' },
     { key: 'proposals', label: 'Chờ XN', badge: pendingCount },
@@ -79,6 +86,12 @@ export default function PlansPage() {
           <button onClick={() => setShowDebtForm(true)}
             className="text-sm bg-emerald-500 text-white px-4 py-2 rounded-xl font-medium hover:bg-emerald-600 transition">
             + Thêm nợ
+          </button>
+        )}
+        {tab === 'hui' && (
+          <button onClick={() => setShowHuiForm(true)}
+            className="text-sm bg-emerald-500 text-white px-4 py-2 rounded-xl font-medium hover:bg-emerald-600 transition">
+            + Thêm hụi
           </button>
         )}
         {tab === 'recurring' && (
@@ -110,6 +123,14 @@ export default function PlansPage() {
       ) : (
         <>
           {tab === 'forecast' && <PlanItemList />}
+
+          {tab === 'hui' && (
+            <HuiList
+              huis={huis}
+              onUpdate={h => setHuis(prev => prev.map(x => x.id === h.id ? h : x))}
+              onDelete={id => setHuis(prev => prev.filter(x => x.id !== id))}
+            />
+          )}
 
           {tab === 'savings' && (
             <SavingsGoalList
@@ -181,6 +202,13 @@ export default function PlansPage() {
             setEditingGoal(undefined)
           }}
           onClose={() => { setShowSavingsForm(false); setEditingGoal(undefined) }}
+        />
+      )}
+
+      {showHuiForm && (
+        <HuiForm
+          onSaved={h => { setHuis(prev => [h, ...prev]); setShowHuiForm(false) }}
+          onClose={() => setShowHuiForm(false)}
         />
       )}
 

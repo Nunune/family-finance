@@ -8,6 +8,7 @@ import DailyBarChart from '../components/Charts/DailyBarChart'
 import CategoryPieChart from '../components/Charts/CategoryPieChart'
 import WeeklyInsightCard from '../components/Charts/WeeklyInsightCard'
 import PocketManager from '../components/Pocket/PocketManager'
+import TransferForm from '../components/Transfer/TransferForm'
 import { useSocket } from '../contexts/SocketContext'
 import { useAuth } from '../contexts/AuthContext'
 import { format } from 'date-fns'
@@ -40,6 +41,7 @@ export default function WalletPage({ walletType }: Props) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [showPocketManager, setShowPocketManager] = useState(false)
 
+  const [showTransfer, setShowTransfer] = useState(false)
   const [showBalanceModal, setShowBalanceModal] = useState(false)
   const [balanceInput, setBalanceInput] = useState('')
   const [savingBalance, setSavingBalance] = useState(false)
@@ -164,12 +166,20 @@ export default function WalletPage({ walletType }: Props) {
           </h1>
           {isShared && <p className="text-xs text-gray-400 mt-0.5">Cập nhật theo thời gian thực</p>}
         </div>
-        <button
-          onClick={() => { setEditing(null); setShowForm(true) }}
-          className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition"
-        >
-          Nhập đầy đủ
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowTransfer(true)}
+            className="bg-indigo-50 border border-indigo-200 text-indigo-600 text-sm font-medium px-3 py-2 rounded-lg transition hover:bg-indigo-100"
+          >
+            ↔ Chuyển
+          </button>
+          <button
+            onClick={() => { setEditing(null); setShowForm(true) }}
+            className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition"
+          >
+            Nhập đầy đủ
+          </button>
+        </div>
       </div>
 
       {/* Total wallet balance */}
@@ -339,6 +349,13 @@ export default function WalletPage({ walletType }: Props) {
           editing={editing}
           onSuccess={() => { setShowForm(false); setEditing(null); load() }}
           onCancel={() => { setShowForm(false); setEditing(null) }}
+        />
+      )}
+
+      {showTransfer && (
+        <TransferForm
+          onSuccess={() => { setShowTransfer(false); load() }}
+          onClose={() => setShowTransfer(false)}
         />
       )}
 

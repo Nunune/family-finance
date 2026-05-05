@@ -60,6 +60,7 @@ model User {
   planItems            PlanItem[]
   subFundMembers       SubFundMember[]
   savingsContribs      SavingsContribution[]
+  huis                 Hui[]
   withdrawalRequests   SavingsWithdrawalRequest[]  @relation("WithdrawalRequester")
   withdrawalApprovals  SavingsWithdrawalApproval[]
   createdAt           DateTime  @default(now())
@@ -163,16 +164,17 @@ model IdempotencyKey {
 }
 
 model Transaction {
-  id          String           @id @default(cuid())
-  amount      Float
-  type        String
-  date        DateTime
-  note        String?
-  walletId    String
-  categoryId  String
-  userId      String
-  pocketId    String?
-  deletedAt   DateTime?
+  id              String           @id @default(cuid())
+  amount          Float
+  type            String
+  date            DateTime
+  note            String?
+  walletId        String
+  categoryId      String
+  userId          String
+  pocketId        String?
+  deletedAt       DateTime?
+  transferGroupId String?
   wallet      Wallet           @relation(fields: [walletId], references: [id])
   category    Category         @relation(fields: [categoryId], references: [id])
   user        User             @relation(fields: [userId], references: [id])
@@ -387,6 +389,41 @@ model PlanCompletion {
   createdAt  DateTime @default(now())
 
   @@unique([planItemId, periodKey])
+}
+
+// ─── Hụi (Rotating savings club) ─────────────────────────────────────────────
+
+model Hui {
+  id          String     @id @default(cuid())
+  name        String
+  amount      Float
+  totalRounds Int
+  myRound     Int
+  startDate   DateTime
+  frequency   String     @default("MONTHLY") // "MONTHLY" | "WEEKLY"
+  status      String     @default("ACTIVE")  // "ACTIVE" | "COMPLETED"
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rounds      HuiRound[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([userId])
+}
+
+model HuiRound {
+  id         String    @id @default(cuid())
+  huiId      String
+  roundNo    Int
+  ownerName  String?
+  dueDate    DateTime
+  isPaid     Boolean   @default(false)
+  isReceived Boolean   @default(false)
+  paidAt     DateTime?
+  hui        Hui       @relation(fields: [huiId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+
+  @@unique([huiId, roundNo])
 }
 
 model TransactionProposal {
