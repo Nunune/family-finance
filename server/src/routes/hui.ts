@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { authenticate } from '../middleware/auth'
-import { getHuis, createHui, updateHui, deleteHui, toggleRound } from '../controllers/huiController'
+import { getHuis, createHui, updateHui, deleteHui, toggleRound, setBid } from '../controllers/huiController'
 
 const router = Router()
 router.use(authenticate)
@@ -9,5 +9,6 @@ router.post('/', createHui)
 router.patch('/:id', updateHui)
 router.delete('/:id', deleteHui)
 router.post('/:id/rounds/:roundNo/toggle', toggleRound)
+router.patch('/:id/rounds/:roundNo/bid', setBid)
 
 export default router

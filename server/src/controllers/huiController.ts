@@ -79,6 +79,29 @@ export async function deleteHui(req: AuthRequest, res: Response) {
   res.json({ success: true })
 }
 
+export async function setBid(req: AuthRequest, res: Response) {
+  try {
+    const { id, roundNo } = req.params
+    const hui = await (prisma as any).hui.findFirst({ where: { id, userId: req.userId! }, include: { rounds: true } })
+    if (!hui) return res.status(404).json({ error: 'Không tìm thấy' })
+
+    const round = hui.rounds.find((r: any) => r.roundNo === parseInt(roundNo))
+    if (!round) return res.status(404).json({ error: 'Không tìm thấy kỳ' })
+
+    const { bidAmount, ownerName } = req.body
+    const updated = await (prisma as any).huiRound.update({
+      where: { id: round.id },
+      data: {
+        bidAmount: bidAmount != null ? parseFloat(bidAmount) : null,
+        ownerName: ownerName ?? round.ownerName,
+      },
+    })
+    res.json(updated)
+  } catch {
+    res.status(500).json({ error: 'Lỗi server' })
+  }
+}
+
 export async function toggleRound(req: AuthRequest, res: Response) {
   try {
     const { id, roundNo } = req.params

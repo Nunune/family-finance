@@ -417,6 +417,7 @@ model HuiRound {
   roundNo    Int
   ownerName  String?
   dueDate    DateTime
+  bidAmount  Float?
   isPaid     Boolean   @default(false)
   isReceived Boolean   @default(false)
   paidAt     DateTime?

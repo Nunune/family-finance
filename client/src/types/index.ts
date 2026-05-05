@@ -301,6 +301,7 @@ export interface HuiRound {
   huiId: string
   roundNo: number
   ownerName?: string | null
+  bidAmount?: number | null  // giá kêu; null = không ai kêu → đóng giá gốc
   dueDate: string
   isPaid: boolean
   isReceived: boolean
