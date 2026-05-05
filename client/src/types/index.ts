@@ -318,6 +318,7 @@ export interface Hui {
   startDate: string
   frequency: 'MONTHLY' | 'WEEKLY'
   status: 'ACTIVE' | 'COMPLETED'
+  organizerFee?: number | null
   userId: string
   rounds: HuiRound[]
   createdAt: string

@@ -394,19 +394,20 @@ model PlanCompletion {
 // ─── Hụi (Rotating savings club) ─────────────────────────────────────────────
 
 model Hui {
-  id          String     @id @default(cuid())
-  name        String
-  amount      Float
-  totalRounds Int
-  myRound     Int
-  startDate   DateTime
-  frequency   String     @default("MONTHLY") // "MONTHLY" | "WEEKLY"
-  status      String     @default("ACTIVE")  // "ACTIVE" | "COMPLETED"
-  userId      String
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rounds      HuiRound[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id           String     @id @default(cuid())
+  name         String
+  amount       Float
+  totalRounds  Int
+  myRound      Int
+  startDate    DateTime
+  frequency    String     @default("MONTHLY") // "MONTHLY" | "WEEKLY"
+  status       String     @default("ACTIVE")  // "ACTIVE" | "COMPLETED"
+  organizerFee Float?     // tiền công thảo hụi, áp dụng khi hốt kỳ 1
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rounds       HuiRound[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   @@index([userId])
 }

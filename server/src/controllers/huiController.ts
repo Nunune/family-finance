@@ -20,7 +20,7 @@ export async function getHuis(req: AuthRequest, res: Response) {
 
 export async function createHui(req: AuthRequest, res: Response) {
   try {
-    const { name, amount, totalRounds, myRound, startDate, frequency, roundOwners } = req.body
+    const { name, amount, totalRounds, myRound, startDate, frequency, roundOwners, organizerFee } = req.body
     // roundOwners: optional array of { roundNo, ownerName }
     const ownerMap: Record<number, string> = {}
     if (Array.isArray(roundOwners)) {
@@ -35,6 +35,7 @@ export async function createHui(req: AuthRequest, res: Response) {
         myRound,
         startDate: new Date(startDate),
         frequency: frequency ?? 'MONTHLY',
+        organizerFee: organizerFee != null ? parseFloat(organizerFee) : null,
         userId: req.userId!,
         rounds: {
           create: Array.from({ length: totalRounds }, (_, i) => ({
@@ -59,10 +60,14 @@ export async function updateHui(req: AuthRequest, res: Response) {
     const existing = await (prisma as any).hui.findFirst({ where: { id, userId: req.userId! } })
     if (!existing) return res.status(404).json({ error: 'Không tìm thấy' })
 
-    const { name, status } = req.body
+    const { name, status, organizerFee } = req.body
     const hui = await (prisma as any).hui.update({
       where: { id },
-      data: { name, status },
+      data: {
+        name,
+        status,
+        ...(organizerFee !== undefined && { organizerFee: organizerFee != null ? parseFloat(organizerFee) : null }),
+      },
       include: { rounds: { orderBy: { roundNo: 'asc' } } },
     })
     res.json(hui)

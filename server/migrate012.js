@@ -1,0 +1,6 @@
+const { Client } = require('pg')
+const client = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+client.connect()
+  .then(() => client.query('ALTER TABLE "Hui" ADD COLUMN IF NOT EXISTS "organizerFee" DOUBLE PRECISION;'))
+  .then(() => { console.log('Migration 0012 applied.'); client.end() })
+  .catch(e => { console.error(e.message); process.exit(1) })

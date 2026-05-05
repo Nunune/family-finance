@@ -253,7 +253,16 @@ function HuiCard({ hui, expanded, onToggleExpand, onUpdate, onDelete }: {
                     {/* Amount & bid button */}
                     <div className="text-right shrink-0">
                       {isMyRound ? (
-                        <span className="text-sm font-bold text-indigo-600">Hốt tiền</span>
+                        <div className="text-right">
+                          <span className="text-sm font-bold text-indigo-600">Hốt tiền</span>
+                          {hui.myRound === 1 && (
+                            <p className="text-xs text-indigo-400 mt-0.5">
+                              {hui.organizerFee != null
+                                ? `~${fmt(hui.amount * hui.totalRounds - hui.organizerFee)}`
+                                : `~${fmt(hui.amount * hui.totalRounds)}`}
+                            </p>
+                          )}
+                        </div>
                       ) : (
                         <>
                           <span className={`text-sm font-bold ${isDone ? 'text-gray-400' : isHuiChet ? 'text-gray-600' : 'text-red-500'}`}>

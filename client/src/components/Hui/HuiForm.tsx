@@ -23,6 +23,7 @@ export default function HuiForm({ onSaved, onClose }: Props) {
   const [myRound, setMyRound] = useState(1)
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 7) + '-01')
   const [frequency, setFrequency] = useState<'MONTHLY' | 'WEEKLY'>('MONTHLY')
+  const [organizerFeeRaw, setOrganizerFeeRaw] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -32,9 +33,11 @@ export default function HuiForm({ onSaved, onClose }: Props) {
     if (!amount || amount <= 0) return setError('Nhập số tiền hợp lệ')
     if (myRound < 1 || myRound > totalRounds) return setError(`Kỳ của bạn phải từ 1 đến ${totalRounds}`)
 
+    const organizerFee = myRound === 1 ? (parseAmt(organizerFeeRaw) ?? null) : null
+
     setSaving(true); setError('')
     try {
-      const res = await api.post('/hui', { name: name.trim(), amount, totalRounds, myRound, startDate, frequency })
+      const res = await api.post('/hui', { name: name.trim(), amount, totalRounds, myRound, startDate, frequency, organizerFee })
       onSaved(res.data)
     } catch (e: any) {
       setError(e.response?.data?.error ?? 'Lỗi server')
@@ -103,9 +106,26 @@ export default function HuiForm({ onSaved, onClose }: Props) {
           </div>
         </div>
 
-        <div className="bg-emerald-50 rounded-xl p-3 text-sm text-emerald-700">
+        {myRound === 1 && (
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Tiền công thảo hụi <span className="text-gray-400">(tuỳ chọn)</span></label>
+            <input
+              type="text" inputMode="numeric" placeholder="100k, 200k..." value={organizerFeeRaw}
+              onChange={e => setOrganizerFeeRaw(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+            />
+          </div>
+        )}
+
+        <div className="bg-emerald-50 rounded-xl p-3 text-sm text-emerald-700 space-y-0.5">
           <p>Tổng đóng: <strong>{((parseAmt(amountRaw) ?? 0) * (totalRounds - 1)).toLocaleString('vi-VN')} ₫</strong></p>
-          <p>Hốt được: <strong>{((parseAmt(amountRaw) ?? 0) * totalRounds).toLocaleString('vi-VN')} ₫</strong> vào kỳ {myRound}</p>
+          {myRound === 1 ? (
+            <p>Hốt được: <strong>
+              {((parseAmt(amountRaw) ?? 0) * totalRounds - (parseAmt(organizerFeeRaw) ?? 0)).toLocaleString('vi-VN')} ₫
+            </strong> vào kỳ 1 {parseAmt(organizerFeeRaw) ? `(trừ ${(parseAmt(organizerFeeRaw)!).toLocaleString('vi-VN')} ₫ công thảo)` : ''}</p>
+          ) : (
+            <p>Hốt được: <strong>{((parseAmt(amountRaw) ?? 0) * totalRounds).toLocaleString('vi-VN')} ₫</strong> vào kỳ {myRound}</p>
+          )}
         </div>
 
         {error && <p className="text-xs text-red-500">{error}</p>}
