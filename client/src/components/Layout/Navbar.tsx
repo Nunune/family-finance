@@ -84,6 +84,12 @@ export default function Navbar() {
                 </span>
               )}
             </NavLink>
+
+            {user?.role === 'ADMIN' && (
+              <NavLink to="/admin" className={({ isActive }) =>
+                `px-3 py-1.5 rounded-lg text-sm font-medium transition ${isActive ? 'bg-amber-50 text-amber-700' : 'text-gray-600 hover:text-gray-900'}`
+              }>Admin</NavLink>
+            )}
           </div>
 
           <div className="relative flex items-center gap-2">

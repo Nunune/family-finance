@@ -10,6 +10,7 @@ import FamilyPage from './pages/FamilyPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import PlansPage from './pages/PlansPage'
 import CategoriesPage from './pages/CategoriesPage'
+import AdminPage from './pages/AdminPage'
 import Navbar from './components/Layout/Navbar'
 import BottomNav from './components/Layout/BottomNav'
 import { ProposalProvider } from './contexts/ProposalContext'
@@ -91,6 +92,7 @@ function AppContent() {
         <Route path="/family" element={<FamilyPage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/categories" element={<CategoriesPage />} />
+        {user.role === 'ADMIN' && <Route path="/admin" element={<AdminPage />} />}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </div>
