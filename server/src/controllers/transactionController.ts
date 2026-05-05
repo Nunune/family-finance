@@ -578,7 +578,7 @@ export async function getWeeklySummary(req: AuthRequest, res: Response) {
 
     const transactions = await prisma.transaction.findMany({
       where: { walletId, date: { gte: queryStart, lte: now }, deletedAt: null, type: 'EXPENSE' },
-      include: { category: { select: { name: true, icon: true } } },
+      include: { category: { select: { name: true, icon: true, color: true } } },
     })
 
     // Xây dựng 4 tuần theo thứ tự thời gian (cũ → mới)
@@ -622,8 +622,8 @@ export async function getWeeklySummary(req: AuthRequest, res: Response) {
       else alert = 'NORMAL'
     }
 
-    // Top 3 danh mục tuần này
-    const catMap = new Map<string, { name: string; icon: string; amount: number }>()
+    // Top danh mục tuần này + budget data
+    const catMap = new Map<string, { categoryId: string; name: string; icon: string; color: string; amount: number }>()
     transactions
       .filter(tx => new Date(tx.date) >= thisWeekStart)
       .forEach(tx => {
@@ -631,15 +631,52 @@ export async function getWeeklySummary(req: AuthRequest, res: Response) {
         const key = tx.categoryId
         const entry = catMap.get(key)
         if (entry) entry.amount += tx.amount
-        else catMap.set(key, { name: cat?.name ?? '', icon: cat?.icon ?? '💰', amount: tx.amount })
+        else catMap.set(key, { categoryId: key, name: cat?.name ?? '', icon: cat?.icon ?? '💰', color: cat?.color ?? '#6B7280', amount: tx.amount })
       })
 
-    const topCategories = Array.from(catMap.values())
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 3)
+    // Fetch budgets for current user (chỉ cho ví cá nhân)
+    const budgets = walletType === 'PERSONAL'
+      ? await (prisma as any).weeklyBudget.findMany({
+          where: { userId },
+          include: { category: { select: { id: true, name: true, icon: true, color: true } } },
+        })
+      : []
+
+    const budgetMap = new Map<string, { limitAmount: number; alertPct: number }>()
+    budgets.forEach((b: any) => budgetMap.set(b.categoryId, { limitAmount: b.limitAmount, alertPct: b.alertPct }))
+
+    const allCatsSorted = Array.from(catMap.values()).sort((a, b) => b.amount - a.amount)
+
+    const topCategories = allCatsSorted.slice(0, 5).map(cat => {
+      const budget = budgetMap.get(cat.categoryId)
+      const usedPct = budget ? Math.round((cat.amount / budget.limitAmount) * 100) : null
+      let budgetStatus: 'EXCEEDED' | 'WARNING' | 'OK' | null = null
+      if (budget && usedPct !== null) {
+        if (usedPct >= 100) budgetStatus = 'EXCEEDED'
+        else if (usedPct >= budget.alertPct) budgetStatus = 'WARNING'
+        else budgetStatus = 'OK'
+      }
+      return { ...cat, budget: budget ?? null, usedPct, budgetStatus }
+    })
+
+    // Danh mục có ngân sách nhưng chưa chi tuần này
+    budgets.forEach((b: any) => {
+      if (!catMap.has(b.categoryId) && topCategories.length < 8) {
+        topCategories.push({
+          categoryId: b.categoryId,
+          name: b.category.name,
+          icon: b.category.icon,
+          color: b.category.color,
+          amount: 0,
+          budget: { limitAmount: b.limitAmount, alertPct: b.alertPct },
+          usedPct: 0,
+          budgetStatus: 'OK',
+        })
+      }
+    })
 
     // Ước tính chi tiêu cả tuần dựa trên tốc độ hiện tại
-    const daysElapsed = daysFromMonday + 1 // số ngày đã trôi qua trong tuần (bao gồm hôm nay)
+    const daysElapsed = daysFromMonday + 1
     const projectedWeek = daysElapsed > 0 ? Math.round((thisWeekExpense / daysElapsed) * 7) : 0
 
     res.json({

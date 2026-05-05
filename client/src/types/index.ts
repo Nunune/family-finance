@@ -196,6 +196,43 @@ export interface SavingsGoal {
   updatedAt: string
 }
 
+// ─── Weekly Budgets ─────────────────────────────────────────────────────────
+
+export interface WeeklyBudget {
+  id: string
+  userId: string
+  categoryId: string
+  limitAmount: number
+  alertPct: number
+  category: Category
+  createdAt: string
+  updatedAt: string
+}
+
+export type BudgetStatus = 'EXCEEDED' | 'WARNING' | 'OK'
+
+export interface WeeklyCategorySummary {
+  categoryId: string
+  name: string
+  icon: string
+  color: string
+  amount: number
+  budget: { limitAmount: number; alertPct: number } | null
+  usedPct: number | null
+  budgetStatus: BudgetStatus | null
+}
+
+export interface WeeklySummary {
+  weeks: { weeksAgo: number; label: string; startDate: string; endDate: string; expense: number }[]
+  thisWeek: number
+  avgExpense: number
+  ratio: number
+  alert: 'HIGH' | 'MODERATE' | 'NORMAL' | 'GOOD' | null
+  topCategories: WeeklyCategorySummary[]
+  projectedWeek: number
+  daysElapsed: number
+}
+
 export interface TransactionProposal {
   id: string
   recurringId: string

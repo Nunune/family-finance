@@ -55,6 +55,7 @@ model User {
   recurrings           RecurringTransaction[]
   savingsGoals         SavingsGoal[]
   categories           Category[]
+  weeklyBudgets        WeeklyBudget[]
   savingsContribs      SavingsContribution[]
   withdrawalRequests   SavingsWithdrawalRequest[]  @relation("WithdrawalRequester")
   withdrawalApprovals  SavingsWithdrawalApproval[]
@@ -101,8 +102,23 @@ model Category {
   user         User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   recurrings   RecurringTransaction[]
+  weeklyBudgets WeeklyBudget[]
 
   @@unique([name, userId])
+}
+
+model WeeklyBudget {
+  id          String   @id @default(cuid())
+  userId      String
+  categoryId  String
+  limitAmount Float
+  alertPct    Int      @default(80)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, categoryId])
 }
 
 model IdempotencyKey {
