@@ -5,6 +5,7 @@ import { SocketProvider } from './contexts/SocketContext'
 import AuthPage from './pages/AuthPage'
 import DashboardPage from './pages/DashboardPage'
 import WalletPage from './pages/WalletPage'
+import SharedFundPage from './pages/SharedFundPage'
 import FamilyPage from './pages/FamilyPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import PlansPage from './pages/PlansPage'
@@ -86,9 +87,7 @@ function AppContent() {
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/personal" element={<WalletPage walletType="PERSONAL" />} />
-        <Route path="/shared" element={
-          user.familyId ? <WalletPage walletType="SHARED" /> : <Navigate to="/family" />
-        } />
+        <Route path="/shared" element={<SharedFundPage />} />
         <Route path="/family" element={<FamilyPage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/categories" element={<CategoriesPage />} />

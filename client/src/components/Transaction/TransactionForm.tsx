@@ -10,9 +10,10 @@ interface Props {
   onSuccess: () => void
   onCancel: () => void
   editing?: Transaction | null
+  subFundId?: string  // nếu là giao dịch quỹ phụ
 }
 
-export default function TransactionForm({ walletType, pockets = [], onSuccess, onCancel, editing }: Props) {
+export default function TransactionForm({ walletType, pockets = [], onSuccess, onCancel, editing, subFundId }: Props) {
   const [type, setType] = useState<'INCOME' | 'EXPENSE'>(editing?.type || 'EXPENSE')
   const [amountRaw, setAmountRaw] = useState(editing ? editing.amount.toLocaleString('vi-VN') : '')
   const [date, setDate] = useState(editing ? format(new Date(editing.date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'))
@@ -47,7 +48,8 @@ export default function TransactionForm({ walletType, pockets = [], onSuccess, o
       if (editing) {
         await api.put(`/transactions/${editing.id}`, { amount, type, date, note, categoryId, pocketId: pocket })
       } else {
-        await api.post('/transactions', { amount, type, date, note, categoryId, walletType, pocketId: pocket })
+        const wt = subFundId ? 'SUBFUND' : walletType
+        await api.post('/transactions', { amount, type, date, note, categoryId, walletType: wt, pocketId: pocket, subFundId: subFundId ?? null })
       }
       onSuccess()
     } catch (err: any) {

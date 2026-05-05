@@ -9,13 +9,16 @@ function getIO(req: AuthRequest): Server | null {
 
 export async function getTransactions(req: AuthRequest, res: Response) {
   try {
-    const { walletType, startDate, endDate, categoryId, page, limit } = req.query
+    const { walletType, walletId: directWalletId, startDate, endDate, categoryId, page, limit } = req.query
     const userId = req.userId!
     const pageNum = Math.max(0, parseInt(page as string) || 0)
     const pageSize = Math.min(200, Math.max(1, parseInt(limit as string) || 50))
 
     let walletId: string | undefined
-    if (walletType === 'SHARED') {
+    if (directWalletId) {
+      // Sub-fund: verify the wallet belongs to a fund the user is a member of
+      walletId = directWalletId as string
+    } else if (walletType === 'SHARED') {
       if (!req.familyId) return res.status(400).json({ error: 'Chưa vào gia đình' })
       const wallet = await prisma.wallet.findUnique({ where: { familyId: req.familyId } })
       walletId = wallet?.id
@@ -72,7 +75,7 @@ function pocketDelta(amount: number, type: string) {
 
 export async function createTransaction(req: AuthRequest, res: Response) {
   try {
-    const { amount, type, date, note, categoryId, walletType, pocketId } = req.body
+    const { amount, type, date, note, categoryId, walletType, pocketId, subFundId } = req.body
     const userId = req.userId!
 
     if (!amount || !type || !date || !categoryId || !walletType) {
@@ -96,7 +99,17 @@ export async function createTransaction(req: AuthRequest, res: Response) {
     }
 
     let walletId: string
-    if (walletType === 'SHARED') {
+    if (walletType === 'SUBFUND' && subFundId) {
+      const db = prisma as any
+      const fund = await db.subFund.findFirst({
+        where: { id: subFundId, familyId: req.familyId },
+        include: { wallet: true, members: { where: { userId } } },
+      })
+      if (!fund) return res.status(404).json({ error: 'Không tìm thấy quỹ phụ' })
+      if (!fund.members.length) return res.status(403).json({ error: 'Bạn không phải thành viên quỹ này' })
+      if (!fund.wallet) return res.status(404).json({ error: 'Quỹ phụ chưa có ví' })
+      walletId = fund.wallet.id
+    } else if (walletType === 'SHARED') {
       if (!req.familyId) return res.status(400).json({ error: 'Chưa vào gia đình' })
       const wallet = await prisma.wallet.findUnique({ where: { familyId: req.familyId } })
       if (!wallet) return res.status(404).json({ error: 'Không tìm thấy quỹ chung' })

@@ -2,8 +2,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../contexts/SocketContext'
 import api from '../services/api'
-import { Family } from '../types'
+import { Family, SubFund } from '../types'
 import FamilySetup from '../components/Family/FamilySetup'
+import SubFundManager from '../components/Family/SubFundManager'
 import { format } from 'date-fns'
 import { vi } from 'date-fns/locale'
 
@@ -18,6 +19,7 @@ export default function FamilyPage() {
   const { user } = useAuth()
   const { socket } = useSocket()
   const [family, setFamily] = useState<Family | null>(null)
+  const [subFunds, setSubFunds] = useState<SubFund[]>([])
   const [invites, setInvites] = useState<Invite[]>([])
   const [showCreateInvite, setShowCreateInvite] = useState(false)
   const [personalCode, setPersonalCode] = useState('')
@@ -31,6 +33,7 @@ export default function FamilyPage() {
   const loadFamily = useCallback(() => {
     if (!user?.familyId) return
     api.get('/auth/family').then(r => setFamily(r.data)).catch(() => {})
+    api.get('/sub-funds').then(r => setSubFunds(r.data)).catch(() => {})
     if (user.role === 'ADMIN') {
       api.get('/auth/family/invites').then(r => setInvites(r.data)).catch(() => {})
     }
@@ -231,6 +234,18 @@ export default function FamilyPage() {
             <span>⬇</span>
             {exporting ? 'Đang xuất...' : 'Tải backup (.json)'}
           </button>
+        </div>
+      )}
+
+      {family && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <SubFundManager
+            funds={subFunds}
+            familyMembers={family.members}
+            isAdmin={user?.role === 'ADMIN'}
+            currentUserId={user!.id}
+            onChange={setSubFunds}
+          />
         </div>
       )}
 

@@ -11,6 +11,7 @@ interface Props {
   walletType: WalletType
   categories: Category[]
   onSuccess: () => void
+  subFundId?: string
 }
 
 function formatVND(n: number) {
@@ -123,7 +124,7 @@ function CategoryPicker({ categories, type, onSelect }: {
 
 // ─── Main QuickAdd ────────────────────────────────────────────────────────
 
-export default function QuickAdd({ walletType, categories, onSuccess }: Props) {
+export default function QuickAdd({ walletType, categories, onSuccess, subFundId }: Props) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [result, setResult] = useState<ParseResult | null>(null)
@@ -256,7 +257,8 @@ export default function QuickAdd({ walletType, categories, onSuccess }: Props) {
       date: format(finalDate, 'yyyy-MM-dd'),
       note: finalNote,
       categoryId: finalCategory.id,
-      walletType,
+      walletType: subFundId ? 'SUBFUND' : walletType,
+      subFundId: subFundId ?? null,
     }
 
     rememberWords(text, finalCategory.id, txType)

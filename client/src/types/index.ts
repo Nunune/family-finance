@@ -66,7 +66,7 @@ export interface Summary {
   byCategory: { name: string; color: string; icon: string; total: number }[]
 }
 
-export type WalletType = 'PERSONAL' | 'SHARED'
+export type WalletType = 'PERSONAL' | 'SHARED' | 'SUBFUND'
 
 export interface WalletPocket {
   id: string
@@ -192,6 +192,30 @@ export interface SavingsGoal {
   isCompleted: boolean
   contributions: SavingsContribution[]
   withdrawalRequests: SavingsWithdrawalRequest[]
+  createdAt: string
+  updatedAt: string
+}
+
+// ─── Sub Funds (Quỹ phụ) ────────────────────────────────────────────────────
+
+export interface SubFundMember {
+  id: string
+  subFundId: string
+  userId: string
+  role: 'ADMIN' | 'MEMBER'
+  user: { id: string; name: string; role: string }
+  createdAt: string
+}
+
+export interface SubFund {
+  id: string
+  name: string
+  icon: string
+  description?: string | null
+  familyId: string
+  wallet: { id: string; initialBalance: number } | null
+  members: SubFundMember[]
+  balance: number
   createdAt: string
   updatedAt: string
 }

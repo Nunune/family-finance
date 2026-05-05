@@ -15,6 +15,7 @@ model Family {
   sharedWallet Wallet?       @relation("SharedWallet")
   invites      FamilyInvite[]
   debts        Debt[]
+  subFunds     SubFund[]
 }
 
 model FamilyInvite {
@@ -57,6 +58,7 @@ model User {
   categories           Category[]
   weeklyBudgets        WeeklyBudget[]
   planItems            PlanItem[]
+  subFundMembers       SubFundMember[]
   savingsContribs      SavingsContribution[]
   withdrawalRequests   SavingsWithdrawalRequest[]  @relation("WithdrawalRequester")
   withdrawalApprovals  SavingsWithdrawalApproval[]
@@ -68,12 +70,41 @@ model Wallet {
   type           String
   userId         String?       @unique
   familyId       String?       @unique
+  subFundId      String?       @unique
   initialBalance Float         @default(0)
   user           User?         @relation("PersonalWallet", fields: [userId], references: [id])
   family         Family?       @relation("SharedWallet", fields: [familyId], references: [id])
+  subFund        SubFund?      @relation("SubFundWallet", fields: [subFundId], references: [id])
   transactions   Transaction[]
   debts          Debt[]
   pockets        WalletPocket[]
+}
+
+model SubFund {
+  id          String          @id @default(cuid())
+  name        String
+  icon        String          @default("🏦")
+  description String?
+  familyId    String
+  family      Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  wallet      Wallet?         @relation("SubFundWallet")
+  members     SubFundMember[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([familyId])
+}
+
+model SubFundMember {
+  id        String   @id @default(cuid())
+  subFundId String
+  userId    String
+  role      String   @default("MEMBER") // "ADMIN" | "MEMBER"
+  subFund   SubFund  @relation(fields: [subFundId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([subFundId, userId])
 }
 
 model WalletPocket {
