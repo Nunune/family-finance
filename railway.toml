@@ -3,6 +3,6 @@ builder = "nixpacks"
 nixpacksConfigPath = "nixpacks.toml"
 
 [deploy]
-startCommand = "cd server && npm run db:deploy && npm start"
+startCommand = "if [ \"$RAILWAY_SERVICE_NAME\" = \"family-finance-client\" ]; then cd client && npx serve dist -s -l $PORT; else cd server && npm run db:deploy && npm start; fi"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3

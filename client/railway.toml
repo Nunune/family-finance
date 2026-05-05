@@ -1,0 +1,9 @@
+[build]
+builder = "nixpacks"
+
+[build.env]
+NODE_ENV = "production"
+
+[deploy]
+startCommand = "npx serve dist -s -l $PORT"
+restartPolicyType = "on_failure"

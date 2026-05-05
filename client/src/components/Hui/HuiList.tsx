@@ -181,7 +181,7 @@ function HuiCard({ hui, expanded, onToggleExpand, onUpdate, onDelete }: {
       {expanded && (
         <div className="border-t border-gray-50">
           <div className="px-4 py-2 bg-gray-50 text-xs text-gray-500 flex gap-3">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" /> Hụi sống (chưa hốt) — đóng giá kêu</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" /> Hụi sống (chưa hốt) — điền tiền thực đóng để tính lời</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-400 inline-block" /> Hụi chết (đã hốt) — đóng giá gốc</span>
           </div>
 
@@ -234,15 +234,16 @@ function HuiCard({ hui, expanded, onToggleExpand, onUpdate, onDelete }: {
                           {r.bidAmount ? (
                             <>
                               <span className="text-xs text-gray-500">
-                                {r.ownerName ? `${r.ownerName} kêu` : 'Giá kêu'}: <span className="font-medium text-indigo-600">{fmt(r.bidAmount)}</span>
+                                Đóng: <span className="font-medium text-indigo-600">{fmt(r.bidAmount)}</span>
+                                {r.ownerName && <span className="text-gray-400"> · {r.ownerName} hốt</span>}
                               </span>
-                              {!isHuiChet && (
+                              {!isHuiChet && gain > 0 && (
                                 <span className="text-[10px] text-emerald-600 font-medium">+{fmt(gain)} lời</span>
                               )}
                               <button onClick={() => clearBid(r.roundNo)} className="text-[10px] text-gray-300 hover:text-red-400 ml-1">✕</button>
                             </>
                           ) : (
-                            <span className="text-xs text-gray-400">{fmtDate(r.dueDate)} · Chưa có giá kêu</span>
+                            <span className="text-xs text-gray-400">{fmtDate(r.dueDate)} · Chưa điền tiền đóng</span>
                           )}
                         </div>
                       )}
@@ -263,7 +264,7 @@ function HuiCard({ hui, expanded, onToggleExpand, onUpdate, onDelete }: {
                               onClick={e => { e.stopPropagation(); setBiddingRound(r.roundNo); setBidInput(''); setOwnerInput(r.ownerName || '') }}
                               className="block text-[10px] text-indigo-400 hover:text-indigo-600 mt-0.5 ml-auto"
                             >
-                              {r.bidAmount ? 'Sửa giá' : 'Nhập giá kêu'}
+                              {r.bidAmount ? 'Sửa' : 'Điền tiền đóng'}
                             </button>
                           )}
                         </>
@@ -275,16 +276,16 @@ function HuiCard({ hui, expanded, onToggleExpand, onUpdate, onDelete }: {
                   {isBidding && (
                     <div className="mt-2 ml-9 flex items-center gap-2 bg-indigo-50 rounded-xl px-3 py-2">
                       <input
-                        type="text" placeholder="Người hốt" value={ownerInput}
-                        onChange={e => setOwnerInput(e.target.value)}
-                        className="w-24 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-300"
-                      />
-                      <input
-                        type="text" placeholder="Giá kêu (4tr8)" value={bidInput}
+                        type="text" placeholder="Tiền thực đóng (4tr8)" value={bidInput}
                         onChange={e => setBidInput(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && saveBid(r.roundNo)}
                         autoFocus
-                        className="w-24 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                        className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                      />
+                      <input
+                        type="text" placeholder="Người hốt (tuỳ chọn)" value={ownerInput}
+                        onChange={e => setOwnerInput(e.target.value)}
+                        className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-300"
                       />
                       <button onClick={() => saveBid(r.roundNo)} className="text-xs bg-indigo-500 text-white px-2 py-1 rounded-lg">Lưu</button>
                       <button onClick={() => setBiddingRound(null)} className="text-xs text-gray-400">Hủy</button>
