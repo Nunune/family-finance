@@ -164,9 +164,12 @@ export default function DebtList({ debts, userId, onUpdate, onDelete }: Props) {
                       <span className={`text-xs px-2 py-0.5 rounded-full ${scopeCls}`}>{scopeLbl}</span>
                     </div>
                     <p className="text-xs text-gray-500 mt-0.5">{debt.counterparty}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Ngày vay: {new Date(debt.createdAt).toLocaleDateString('vi-VN')}
+                    </p>
                     {debt.dueDate && (
                       <p className={`text-xs mt-0.5 ${overdue ? 'text-red-500' : 'text-gray-400'}`}>
-                        Hạn: {new Date(debt.dueDate).toLocaleDateString('vi-VN')}
+                        Đến hạn: {new Date(debt.dueDate).toLocaleDateString('vi-VN')}
                       </p>
                     )}
                     {debt.note && <p className="text-xs text-gray-400 mt-0.5 italic">{debt.note}</p>}
