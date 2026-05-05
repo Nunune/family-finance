@@ -1,0 +1,298 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Family {
+  id           String        @id @default(cuid())
+  name         String
+  createdAt    DateTime      @default(now())
+  members      User[]
+  sharedWallet Wallet?       @relation("SharedWallet")
+  invites      FamilyInvite[]
+  debts        Debt[]
+}
+
+model FamilyInvite {
+  id               String    @id @default(cuid())
+  familyId         String
+  inviteCode       String    @unique
+  personalCodeHash String
+  hint             String
+  createdByUserId  String
+  usedAt           DateTime?
+  usedByUserId     String?
+  expiresAt        DateTime
+  family           Family    @relation(fields: [familyId], references: [id])
+  createdAt        DateTime  @default(now())
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  name                String
+  email               String    @unique
+  password            String
+  role                String    @default("MEMBER")
+  familyId            String?
+  recoveryCodeHash    String?
+  resetToken          String?
+  resetTokenExpiresAt DateTime?
+  tokenVersion        Int       @default(0)
+  family              Family?   @relation(fields: [familyId], references: [id])
+  personalWallet      Wallet?   @relation("PersonalWallet")
+  transactions        Transaction[]
+  settlementsFrom     Settlement[]   @relation("SettlementFrom")
+  settlementsTo       Settlement[]   @relation("SettlementTo")
+  ownedDebts           Debt[]         @relation("DebtOwner")
+  lentDebts            Debt[]         @relation("DebtLender")
+  borrowedDebts        Debt[]         @relation("DebtBorrower")
+  debtViewAccess       DebtViewer[]
+  debtPayments         DebtPayment[]
+  recurrings           RecurringTransaction[]
+  savingsGoals         SavingsGoal[]
+  savingsContribs      SavingsContribution[]
+  withdrawalRequests   SavingsWithdrawalRequest[]  @relation("WithdrawalRequester")
+  withdrawalApprovals  SavingsWithdrawalApproval[]
+  createdAt           DateTime  @default(now())
+}
+
+model Wallet {
+  id             String        @id @default(cuid())
+  type           String
+  userId         String?       @unique
+  familyId       String?       @unique
+  initialBalance Float         @default(0)
+  user           User?         @relation("PersonalWallet", fields: [userId], references: [id])
+  family         Family?       @relation("SharedWallet", fields: [familyId], references: [id])
+  transactions   Transaction[]
+  debts          Debt[]
+}
+
+model Category {
+  id           String                 @id @default(cuid())
+  name         String                 @unique
+  icon         String
+  color        String
+  type         String
+  isDefault    Boolean                @default(false)
+  transactions Transaction[]
+  recurrings   RecurringTransaction[]
+}
+
+model IdempotencyKey {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  response  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Transaction {
+  id          String           @id @default(cuid())
+  amount      Float
+  type        String
+  date        DateTime
+  note        String?
+  walletId    String
+  categoryId  String
+  userId      String
+  deletedAt   DateTime?
+  wallet      Wallet           @relation(fields: [walletId], references: [id])
+  category    Category         @relation(fields: [categoryId], references: [id])
+  user        User             @relation(fields: [userId], references: [id])
+  logs        TransactionLog[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([walletId, date, deletedAt])
+  @@index([walletId, deletedAt])
+}
+
+model TransactionLog {
+  id            String      @id @default(cuid())
+  transactionId String
+  action        String
+  byUserId      String
+  byUserName    String
+  snapshot      String
+  createdAt     DateTime    @default(now())
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+}
+
+model Settlement {
+  id         String   @id @default(cuid())
+  fromUserId String
+  toUserId   String
+  amount     Float
+  note       String?
+  date       DateTime @default(now())
+  fromUser   User     @relation("SettlementFrom", fields: [fromUserId], references: [id])
+  toUser     User     @relation("SettlementTo", fields: [toUserId], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+// ─── Nợ & Cho vay ──────────────────────────────────────────────────────────
+
+model Debt {
+  id              String       @id @default(cuid())
+  title           String
+  type            String       // "BORROWED" | "LENT"
+  scope           String       // "PERSONAL" | "SHARED" | "INTERNAL"
+  originalAmount  Float
+  remainingAmount Float
+  counterparty    String       // Tên ngân hàng / người
+  note            String?
+  dueDate         DateTime?
+  ownerId         String
+  lenderUserId    String?      // Chỉ cho INTERNAL
+  borrowerUserId  String?      // Chỉ cho INTERNAL
+  walletId        String?
+  familyId        String?
+  owner           User         @relation("DebtOwner",    fields: [ownerId],        references: [id])
+  lender          User?        @relation("DebtLender",   fields: [lenderUserId],   references: [id], onDelete: SetNull)
+  borrower        User?        @relation("DebtBorrower", fields: [borrowerUserId], references: [id], onDelete: SetNull)
+  wallet          Wallet?      @relation(fields: [walletId], references: [id])
+  family          Family?      @relation(fields: [familyId], references: [id])
+  viewers         DebtViewer[]
+  payments        DebtPayment[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([ownerId])
+  @@index([familyId])
+}
+
+model DebtViewer {
+  id     String @id @default(cuid())
+  debtId String
+  userId String
+  debt   Debt   @relation(fields: [debtId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([debtId, userId])
+}
+
+model DebtPayment {
+  id           String   @id @default(cuid())
+  debtId       String
+  amount       Float
+  date         DateTime
+  note         String?
+  paidByUserId String
+  debt         Debt     @relation(fields: [debtId], references: [id], onDelete: Cascade)
+  paidBy       User     @relation(fields: [paidByUserId], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+// ─── Giao dịch định kỳ ────────────────────────────────────────────────────
+
+model RecurringTransaction {
+  id         String                @id @default(cuid())
+  title      String
+  amount     Float
+  type       String
+  categoryId String
+  walletType String
+  frequency  String                // "MONTHLY" | "WEEKLY"
+  dayOfMonth Int?
+  dayOfWeek  Int?
+  remindDays Int                   @default(3)
+  ownerId    String
+  familyId   String?
+  isActive   Boolean               @default(true)
+  nextDue    DateTime
+  category   Category              @relation(fields: [categoryId], references: [id])
+  owner      User                  @relation(fields: [ownerId], references: [id])
+  proposals  TransactionProposal[]
+  createdAt  DateTime              @default(now())
+
+  @@index([ownerId, isActive])
+}
+
+// ─── Quỹ tiết kiệm ────────────────────────────────────────────────────────
+
+model SavingsGoal {
+  id            String                @id @default(cuid())
+  name          String
+  icon          String                @default("🎯")
+  targetAmount  Float
+  targetDate    DateTime
+  savedAmount   Float                 @default(0)
+  ownerId       String
+  familyId      String?
+  isShared      Boolean               @default(false)
+  isCompleted   Boolean               @default(false)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  owner         User                  @relation(fields: [ownerId], references: [id])
+  contributions      SavingsContribution[]
+  withdrawalRequests SavingsWithdrawalRequest[]
+
+  @@index([ownerId])
+}
+
+model SavingsWithdrawalRequest {
+  id            String    @id @default(cuid())
+  goalId        String
+  requestedById String
+  amount        Float
+  note          String?
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  goal          SavingsGoal                @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  requestedBy   User                       @relation("WithdrawalRequester", fields: [requestedById], references: [id])
+  approvals     SavingsWithdrawalApproval[]
+
+  @@index([goalId, status])
+}
+
+model SavingsWithdrawalApproval {
+  id        String   @id @default(cuid())
+  requestId String
+  userId    String
+  approved  Boolean
+  createdAt DateTime @default(now())
+  request   SavingsWithdrawalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user      User                     @relation(fields: [userId], references: [id])
+
+  @@unique([requestId, userId])
+}
+
+model SavingsContribution {
+  id        String      @id @default(cuid())
+  goalId    String
+  userId    String
+  amount    Float
+  type      String      @default("DEPOSIT") // "DEPOSIT" | "WITHDRAWAL"
+  note      String?
+  date      DateTime
+  createdAt DateTime    @default(now())
+  goal      SavingsGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id])
+
+  @@index([goalId])
+}
+
+model TransactionProposal {
+  id               String               @id @default(cuid())
+  recurringId      String
+  amount           Float
+  type             String
+  categoryId       String
+  walletType       String
+  scheduledDate    DateTime
+  confirmationCode String               // 4 chữ số, lưu plain (UX friction, không phải mật khẩu)
+  status           String               @default("PENDING") // "PENDING" | "CONFIRMED" | "DISMISSED"
+  expiresAt        DateTime
+  confirmedAt      DateTime?
+  recurring        RecurringTransaction @relation(fields: [recurringId], references: [id], onDelete: Cascade)
+  createdAt        DateTime             @default(now())
+
+  @@unique([recurringId, scheduledDate])
+  @@index([recurringId, status])
+}
