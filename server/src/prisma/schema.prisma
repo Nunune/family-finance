@@ -56,6 +56,7 @@ model User {
   savingsGoals         SavingsGoal[]
   categories           Category[]
   weeklyBudgets        WeeklyBudget[]
+  planItems            PlanItem[]
   savingsContribs      SavingsContribution[]
   withdrawalRequests   SavingsWithdrawalRequest[]  @relation("WithdrawalRequester")
   withdrawalApprovals  SavingsWithdrawalApproval[]
@@ -103,6 +104,7 @@ model Category {
   transactions Transaction[]
   recurrings   RecurringTransaction[]
   weeklyBudgets WeeklyBudget[]
+  planItems     PlanItem[]
 
   @@unique([name, userId])
 }
@@ -318,6 +320,42 @@ model SavingsContribution {
   user      User        @relation(fields: [userId], references: [id])
 
   @@index([goalId])
+}
+
+// ─── Dự thu / Dự chi ────────────────────────────────────────────────────────
+
+model PlanItem {
+  id          String           @id @default(cuid())
+  title       String
+  amount      Float
+  type        String           // "INCOME" | "EXPENSE"
+  categoryId  String?
+  note        String?
+  frequency   String           // "ONCE" | "MONTHLY" | "WEEKLY"
+  dueDay      Int?             // 1–31 cho MONTHLY; 0–6 cho WEEKLY (0=CN)
+  dueDate     DateTime?        // Chỉ dùng cho ONCE
+  remindDays  Int              @default(3)
+  isActive    Boolean          @default(true)
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  completions PlanCompletion[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([userId, isActive])
+}
+
+model PlanCompletion {
+  id         String   @id @default(cuid())
+  planItemId String
+  periodKey  String   // "2025-05" monthly, "2025-W20" weekly, "2025-05-15" once
+  isDone     Boolean  @default(false)
+  doneAt     DateTime?
+  planItem   PlanItem @relation(fields: [planItemId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([planItemId, periodKey])
 }
 
 model TransactionProposal {

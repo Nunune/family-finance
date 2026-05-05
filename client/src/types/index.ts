@@ -196,6 +196,33 @@ export interface SavingsGoal {
   updatedAt: string
 }
 
+// ─── Plan Items (Dự thu / Dự chi) ───────────────────────────────────────────
+
+export type PlanFrequency = 'ONCE' | 'MONTHLY' | 'WEEKLY'
+
+export interface PlanItem {
+  id: string
+  title: string
+  amount: number
+  type: 'INCOME' | 'EXPENSE'
+  categoryId?: string | null
+  category?: Category | null
+  note?: string | null
+  frequency: PlanFrequency
+  dueDay?: number | null
+  dueDate?: string | null
+  remindDays: number
+  isActive: boolean
+  userId: string
+  // enriched by API for a given month:
+  periodKey?: string
+  isDone?: boolean
+  doneAt?: string | null
+  isDueSoon?: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 // ─── Weekly Budgets ─────────────────────────────────────────────────────────
 
 export interface WeeklyBudget {

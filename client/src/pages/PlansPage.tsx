@@ -9,8 +9,9 @@ import RecurringForm from '../components/Recurring/RecurringForm'
 import ProposalCard from '../components/Recurring/ProposalCard'
 import SavingsGoalList from '../components/Savings/SavingsGoalList'
 import SavingsGoalForm from '../components/Savings/SavingsGoalForm'
+import PlanItemList from '../components/Plan/PlanItemList'
 
-type Tab = 'debts' | 'recurring' | 'proposals' | 'savings'
+type Tab = 'debts' | 'recurring' | 'proposals' | 'savings' | 'forecast'
 
 export default function PlansPage() {
   const { user } = useAuth()
@@ -57,6 +58,7 @@ export default function PlansPage() {
   const pendingCount = proposals.length
 
   const tabs: { key: Tab; label: string; badge?: number }[] = [
+    { key: 'forecast', label: '📅 Dự thu/chi' },
     { key: 'savings', label: '🎯 Quỹ' },
     { key: 'debts', label: 'Nợ & Vay' },
     { key: 'recurring', label: 'Định kỳ' },
@@ -107,6 +109,8 @@ export default function PlansPage() {
         <div className="text-center py-16 text-gray-300 text-3xl animate-pulse">⏳</div>
       ) : (
         <>
+          {tab === 'forecast' && <PlanItemList />}
+
           {tab === 'savings' && (
             <SavingsGoalList
               goals={savingsGoals}
