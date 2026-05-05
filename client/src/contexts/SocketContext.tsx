@@ -16,7 +16,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem('token')
     if (!user || !token) { socket?.disconnect(); setSocket(null); return }
 
-    const s = io(import.meta.env.VITE_API_URL || 'http://localhost:3001', { auth: { token } })
+    const s = io(import.meta.env.VITE_API_URL || undefined, { auth: { token } })
     setSocket(s)
     return () => { s.disconnect() }
   }, [user])

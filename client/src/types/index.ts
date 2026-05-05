@@ -26,6 +26,8 @@ export interface Category {
   icon: string
   color: string
   type: 'INCOME' | 'EXPENSE' | 'BOTH'
+  isDefault: boolean
+  userId?: string | null
 }
 
 export interface TransactionLog {
@@ -48,6 +50,8 @@ export interface Transaction {
   userId: string
   user: { id: string; name: string }
   walletId: string
+  pocketId?: string | null
+  pocket?: WalletPocket | null
   logs?: TransactionLog[]
   createdAt: string
 }
@@ -63,6 +67,18 @@ export interface Summary {
 }
 
 export type WalletType = 'PERSONAL' | 'SHARED'
+
+export interface WalletPocket {
+  id: string
+  walletId: string
+  name: string
+  icon: string
+  color: string
+  balance: number
+  isHidden: boolean
+  order: number
+  createdAt: string
+}
 
 // ─── Debt & Loans ───────────────────────────────────────────────────────────
 

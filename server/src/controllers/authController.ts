@@ -265,6 +265,7 @@ export async function joinFamily(req: AuthRequest, res: Response) {
 
     const family = await prisma.family.findUnique({ where: { id: invite.familyId } })
     const token = generateToken(req.userId!, 'MEMBER', invite.familyId)
+    ;(req as any).io?.to(`family:${invite.familyId}`).emit('family:member_joined')
     res.json({ family, token })
   } catch (err: any) {
     if (err?.status) return res.status(err.status).json({ error: err.msg })
@@ -290,6 +291,7 @@ export async function leaveFamily(req: AuthRequest, res: Response) {
     })
 
     const token = generateToken(req.userId!, 'MEMBER', undefined, updated.tokenVersion)
+    ;(req as any).io?.to(`family:${req.familyId}`).emit('family:member_left')
     res.json({ token })
   } catch {
     res.status(500).json({ error: 'Lỗi server' })

@@ -59,7 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
       setLoading(false)
     }
-    return () => { if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current) }
+
+    const onExpired = () => { setUser(null); setTokenExpiring(false) }
+    window.addEventListener('auth:expired', onExpired)
+    return () => {
+      if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current)
+      window.removeEventListener('auth:expired', onExpired)
+    }
   }, [])
 
   async function login(email: string, password: string) {

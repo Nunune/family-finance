@@ -19,8 +19,8 @@ const categories = [
 
 async function main() {
   for (const cat of categories) {
-    await prisma.category.upsert({
-      where: { name: cat.name },
+    await (prisma.category as any).upsert({
+      where: { name_userId: { name: cat.name, userId: null } },
       update: {},
       create: cat,
     })

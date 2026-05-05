@@ -155,6 +155,15 @@ export default function QuickAdd({ walletType, categories, onSuccess }: Props) {
     }
   }, [open])
 
+  // Re-parse khi categories load xong (user có thể đã gõ trước khi categories về)
+  useEffect(() => {
+    if (text.trim().length <= 1 || categories.length === 0) return
+    const debt = parseDebt(text)
+    setDebtResult(debt)
+    if (debt) { setDebtTypeManual(debt.debtType); setCounterpartyManual(debt.counterparty) }
+    setResult(debt ? null : parseInput(text, categories))
+  }, [categories])
+
   const handleInput = useCallback((val: string) => {
     setText(val)
     setOverrideAmount(null); setOverrideCategory(null); setModeOverride(null)
@@ -194,6 +203,17 @@ export default function QuickAdd({ walletType, categories, onSuccess }: Props) {
   const catConf = overrideCategory ? 'high' : (result?.categoryConfidence ?? 'none')
   const canSubmitTx = !isDebtMode && finalAmount !== null && finalAmount > 0 && finalCategory !== null && !submitting && !submitted
   const canSubmitDebt = isDebtMode && finalAmount !== null && finalAmount > 0 && !submitting && !submitted
+
+  // Học từ input — bỏ số/đơn vị tiền, giữ từ >= 2 ký tự
+  function rememberWords(input: string, categoryId: string, type: 'INCOME' | 'EXPENSE') {
+    const amountLike = /^\d|k$|tr$|triệu$|nghìn$|ngàn$|đồng$/i
+    const seen = new Set<string>()
+    input.toLowerCase().split(/\s+/).forEach(w => {
+      if (w.length < 2 || amountLike.test(w) || seen.has(w)) return
+      seen.add(w)
+      learnPattern(w, categoryId, type)
+    })
+  }
 
   async function handleDebtSubmit() {
     const amount = overrideAmount ?? (debtResult?.amount ?? null)
@@ -239,8 +259,7 @@ export default function QuickAdd({ walletType, categories, onSuccess }: Props) {
       walletType,
     }
 
-    const words = text.toLowerCase().split(/\s+/).filter(w => w.length > 2)
-    words.forEach(w => learnPattern(w, finalCategory.id, txType))
+    rememberWords(text, finalCategory.id, txType)
 
     if (!isOnline) {
       enqueue({ idempotencyKey: idempotencyKey.current, data })

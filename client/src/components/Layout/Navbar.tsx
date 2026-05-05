@@ -1,40 +1,23 @@
-import { NavLink } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
-import { useSocket } from '../../contexts/SocketContext'
-import api from '../../services/api'
+import { usePendingProposals } from '../../contexts/ProposalContext'
 import EditProfileModal from '../Auth/EditProfileModal'
 
 export default function Navbar() {
   const { user, logout, logoutAll, tokenExpiring, dismissExpiryWarning } = useAuth()
-  const { socket } = useSocket()
-  const [pendingProposals, setPendingProposals] = useState(0)
+  const navigate = useNavigate()
+  const pendingProposals = usePendingProposals()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showEditProfile, setShowEditProfile] = useState(false)
+  const [fontScale, setFontScale] = useState(() => localStorage.getItem('fontScale') || 'md')
 
-  useEffect(() => {
-    let cancelled = false
-    async function checkProposals() {
-      try {
-        const { data } = await api.get('/recurring/proposals')
-        if (!cancelled) setPendingProposals(data.length)
-      } catch {}
-    }
-    checkProposals()
-    const iv = setInterval(checkProposals, 5 * 60 * 1000)
-    return () => { cancelled = true; clearInterval(iv) }
-  }, [])
-
-  useEffect(() => {
-    if (!socket) return
-    socket.on('proposals:changed', async () => {
-      try {
-        const { data } = await api.get('/recurring/proposals')
-        setPendingProposals(data.length)
-      } catch {}
-    })
-    return () => { socket.off('proposals:changed') }
-  }, [socket])
+  function applyFontScale(scale: string) {
+    const sizes: Record<string, string> = { sm: '14px', md: '16px', lg: '18px', xl: '20px' }
+    document.documentElement.style.fontSize = sizes[scale] ?? '16px'
+    localStorage.setItem('fontScale', scale)
+    setFontScale(scale)
+  }
 
   return (
     <>
@@ -51,7 +34,7 @@ export default function Navbar() {
             💰 <span className="hidden sm:inline">Thu Chi Gia Đình</span>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="hidden sm:flex items-center gap-1">
             <NavLink to="/" end className={({ isActive }) =>
               `px-3 py-1.5 rounded-lg text-sm font-medium transition ${isActive ? 'bg-emerald-50 text-emerald-700' : 'text-gray-600 hover:text-gray-900'}`
             }>Tổng quan</NavLink>
@@ -96,9 +79,32 @@ export default function Navbar() {
                 <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
                 <div className="absolute right-0 top-9 z-50 bg-white rounded-xl shadow-lg border border-gray-100 py-1 min-w-[160px]">
                   <div className="px-4 py-2 text-xs text-gray-400 border-b border-gray-100">{user?.email}</div>
+                  <div className="px-4 py-2.5 border-b border-gray-100">
+                    <p className="text-xs text-gray-400 mb-1.5">Cỡ chữ</p>
+                    <div className="flex gap-1">
+                      {([
+                        { key: 'sm', label: 'A', cls: 'text-xs' },
+                        { key: 'md', label: 'A', cls: 'text-sm' },
+                        { key: 'lg', label: 'A', cls: 'text-base' },
+                        { key: 'xl', label: 'A', cls: 'text-lg' },
+                      ] as const).map(({ key, label, cls }) => (
+                        <button
+                          key={key}
+                          onClick={() => applyFontScale(key)}
+                          className={`flex-1 py-1 rounded-lg font-bold leading-none transition ${cls} ${fontScale === key ? 'bg-emerald-100 text-emerald-700' : 'text-gray-400 hover:bg-gray-100'}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <button onClick={() => { setShowUserMenu(false); setShowEditProfile(true) }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition">
                     Chỉnh sửa hồ sơ
+                  </button>
+                  <button onClick={() => { setShowUserMenu(false); navigate('/categories') }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition">
+                    Quản lý danh mục
                   </button>
                   <button onClick={() => { setShowUserMenu(false); logout() }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition">

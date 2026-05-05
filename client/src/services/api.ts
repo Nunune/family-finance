@@ -14,7 +14,8 @@ api.interceptors.response.use(
   err => {
     if (err.response?.status === 401) {
       localStorage.removeItem('token')
-      window.location.href = '/login'
+      sessionStorage.setItem('session_expired', '1')
+      window.dispatchEvent(new Event('auth:expired'))
     }
     return Promise.reject(err)
   }

@@ -11,7 +11,6 @@ interface Props {
 const fmt = (n: number) => n.toLocaleString('vi-VN')
 
 export default function ProposalCard({ proposal, onConfirmed, onDismissed }: Props) {
-  const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -21,11 +20,10 @@ export default function ProposalCard({ proposal, onConfirmed, onDismissed }: Pro
   const typeColor = proposal.type === 'EXPENSE' ? 'text-red-600' : 'text-green-600'
 
   async function confirm() {
-    if (code.length !== 4) { setError('Nhập đúng 4 chữ số'); return }
     setError('')
     setLoading(true)
     try {
-      await api.post(`/recurring/proposals/${proposal.id}/confirm`, { code })
+      await api.post(`/recurring/proposals/${proposal.id}/confirm`, {})
       onConfirmed(proposal.id)
     } catch (err: any) {
       setError(err.response?.data?.error || 'Lỗi xác nhận')
@@ -65,38 +63,21 @@ export default function ProposalCard({ proposal, onConfirmed, onDismissed }: Pro
         <span className="text-xs bg-amber-50 text-amber-700 px-2 py-1 rounded-full font-medium shrink-0">Chờ xác nhận</span>
       </div>
 
-      <div className="bg-amber-50 rounded-xl p-3">
-        <p className="text-xs text-amber-700 mb-2">
-          Nhập mã xác nhận để tạo giao dịch:
-          <span className="font-mono font-bold text-lg ml-2 tracking-widest text-amber-800">
-            {proposal.confirmationCode}
-          </span>
-        </p>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            inputMode="numeric"
-            maxLength={4}
-            placeholder="____"
-            value={code}
-            onChange={e => { setCode(e.target.value.replace(/\D/g, '')); setError('') }}
-            className="w-24 text-center font-mono text-lg tracking-widest border-2 border-amber-300 rounded-xl px-2 py-1.5 focus:outline-none focus:border-amber-500 bg-white"
-          />
-          <button
-            onClick={confirm}
-            disabled={loading || code.length !== 4}
-            className="flex-1 py-1.5 bg-emerald-500 text-white text-sm font-medium rounded-xl disabled:opacity-60 transition">
-            {loading ? '...' : 'Xác nhận & Tạo'}
-          </button>
-          <button
-            onClick={dismiss}
-            disabled={loading}
-            className="px-3 py-1.5 border border-gray-200 text-gray-500 text-sm rounded-xl hover:bg-gray-50 transition">
-            Bỏ qua
-          </button>
-        </div>
-        {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          onClick={confirm}
+          disabled={loading}
+          className="flex-1 py-2.5 bg-emerald-500 text-white text-sm font-medium rounded-xl disabled:opacity-60 transition">
+          {loading ? '...' : '✓ Xác nhận & Tạo giao dịch'}
+        </button>
+        <button
+          onClick={dismiss}
+          disabled={loading}
+          className="px-4 py-2.5 border border-gray-200 text-gray-500 text-sm rounded-xl hover:bg-gray-50 transition">
+          Bỏ qua
+        </button>
       </div>
+      {error && <p className="text-red-500 text-xs">{error}</p>}
     </div>
   )
 }

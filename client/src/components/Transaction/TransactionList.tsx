@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Transaction, TransactionLog } from '../../types'
 import { format } from 'date-fns'
 import { vi } from 'date-fns/locale'
@@ -33,8 +33,83 @@ function AuditLog({ logs }: { logs: TransactionLog[] }) {
   )
 }
 
+const ACTION_W = 72
+
+function SwipeRow({ id, openId, setOpenId, onDelete, children }: {
+  id: string
+  openId: string | null
+  setOpenId: (id: string | null) => void
+  onDelete: () => void
+  children: React.ReactNode
+}) {
+  const [offset, setOffset] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const startX = useRef(0)
+  const startOffset = useRef(0)
+  const isOpen = openId === id
+
+  useEffect(() => {
+    if (!isOpen) setOffset(0)
+  }, [isOpen])
+
+  function onTouchStart(e: React.TouchEvent) {
+    startX.current = e.touches[0].clientX
+    startOffset.current = isOpen ? -ACTION_W : 0
+    setDragging(true)
+  }
+
+  function onTouchMove(e: React.TouchEvent) {
+    const dx = e.touches[0].clientX - startX.current
+    setOffset(Math.max(-ACTION_W, Math.min(0, startOffset.current + dx)))
+  }
+
+  function onTouchEnd() {
+    setDragging(false)
+    if (offset < -ACTION_W / 2) {
+      setOffset(-ACTION_W)
+      setOpenId(id)
+    } else {
+      setOffset(0)
+      if (isOpen) setOpenId(null)
+    }
+  }
+
+  return (
+    <div className="relative overflow-hidden">
+      {/* Nút xóa phía sau */}
+      <div
+        className="absolute right-0 top-0 bottom-0 flex items-stretch"
+        style={{ width: ACTION_W }}
+      >
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete() }}
+          className="flex-1 bg-red-500 active:bg-red-600 text-white text-xs font-semibold flex flex-col items-center justify-center gap-0.5"
+        >
+          <span className="text-base">🗑</span>
+          <span>Xóa</span>
+        </button>
+      </div>
+
+      {/* Nội dung row — trượt sang trái */}
+      <div
+        style={{
+          transform: `translateX(${offset}px)`,
+          transition: dragging ? 'none' : 'transform 0.22s ease',
+        }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onClick={() => { if (isOpen) setOpenId(null) }}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export default function TransactionList({ transactions, onEdit, onDelete, showUser }: Props) {
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set())
+  const [swipedId, setSwipedId] = useState<string | null>(null)
 
   function toggleLog(id: string) {
     setExpandedLogs(prev => {
@@ -82,54 +157,60 @@ export default function TransactionList({ transactions, onEdit, onDelete, showUs
               {items.map((t, i) => {
                 const hasLogs = (t.logs?.length ?? 0) > 0
                 const logsOpen = expandedLogs.has(t.id)
-                // Giao dịch đã bị sửa nếu có log "updated"
                 const wasEdited = t.logs?.some(l => l.action === 'updated')
 
                 return (
-                  <div key={t.id} className={`px-4 py-3 hover:bg-gray-50 transition group ${i > 0 ? 'border-t border-gray-50' : ''}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="text-2xl w-9 text-center flex-shrink-0">{t.category.icon}</div>
+                  <SwipeRow
+                    key={t.id}
+                    id={t.id}
+                    openId={swipedId}
+                    setOpenId={setSwipedId}
+                    onDelete={() => onDelete(t.id)}
+                  >
+                    <div className={`px-4 py-3 bg-white hover:bg-gray-50 transition group ${i > 0 ? 'border-t border-gray-50' : ''}`}>
+                      <div className="flex items-center gap-3">
+                        <div className="text-2xl w-9 text-center flex-shrink-0">{t.category.icon}</div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium text-gray-800 truncate">{t.category.name}</span>
-                          {showUser && (
-                            <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">{t.user.name}</span>
-                          )}
-                          {wasEdited && (
-                            <span className="text-xs text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded-full">đã sửa</span>
-                          )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium text-gray-800 truncate">{t.category.name}</span>
+                            {showUser && (
+                              <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">{t.user.name}</span>
+                            )}
+                            {wasEdited && (
+                              <span className="text-xs text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded-full">đã sửa</span>
+                            )}
+                          </div>
+                          {t.note && <p className="text-xs text-gray-400 truncate mt-0.5">{t.note}</p>}
                         </div>
-                        {t.note && <p className="text-xs text-gray-400 truncate mt-0.5">{t.note}</p>}
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`text-sm font-semibold ${t.type === 'INCOME' ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {t.type === 'INCOME' ? '+' : '-'}{formatVND(t.amount)}
+                          </span>
+                          <div className="hidden group-hover:flex gap-1">
+                            {hasLogs && (
+                              <button
+                                onClick={() => toggleLog(t.id)}
+                                className="text-xs text-gray-400 hover:text-gray-600 px-1.5 py-1 rounded"
+                                title="Lịch sử chỉnh sửa"
+                              >
+                                {logsOpen ? '▲' : '🕐'}
+                              </button>
+                            )}
+                            <button onClick={() => onEdit(t)} className="text-xs text-blue-500 hover:text-blue-700 px-1.5 py-1 rounded">Sửa</button>
+                            <button onClick={() => onDelete(t.id)} className="text-xs text-red-400 hover:text-red-600 px-1.5 py-1 rounded">Xóa</button>
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-sm font-semibold ${t.type === 'INCOME' ? 'text-emerald-600' : 'text-red-500'}`}>
-                          {t.type === 'INCOME' ? '+' : '-'}{formatVND(t.amount)}
-                        </span>
-                        <div className="hidden group-hover:flex gap-1">
-                          {hasLogs && (
-                            <button
-                              onClick={() => toggleLog(t.id)}
-                              className="text-xs text-gray-400 hover:text-gray-600 px-1.5 py-1 rounded"
-                              title="Lịch sử chỉnh sửa"
-                            >
-                              {logsOpen ? '▲' : '🕐'}
-                            </button>
-                          )}
-                          <button onClick={() => onEdit(t)} className="text-xs text-blue-500 hover:text-blue-700 px-1.5 py-1 rounded">Sửa</button>
-                          <button onClick={() => onDelete(t.id)} className="text-xs text-red-400 hover:text-red-600 px-1.5 py-1 rounded">Xóa</button>
+                      {logsOpen && hasLogs && (
+                        <div className="mt-2 pl-12 border-t border-gray-50 pt-2">
+                          <AuditLog logs={t.logs!} />
                         </div>
-                      </div>
+                      )}
                     </div>
-
-                    {/* Audit log — chỉ hiện khi user tap 🕐 */}
-                    {logsOpen && hasLogs && (
-                      <div className="mt-2 pl-12 border-t border-gray-50 pt-2">
-                        <AuditLog logs={t.logs!} />
-                      </div>
-                    )}
-                  </div>
+                  </SwipeRow>
                 )
               })}
             </div>

@@ -287,7 +287,6 @@ export async function confirmProposal(req: AuthRequest, res: Response) {
   try {
     const userId = req.userId!
     const { id } = req.params
-    const { code } = req.body
 
     const proposal = await prisma.transactionProposal.findUnique({
       where: { id },
@@ -304,7 +303,6 @@ export async function confirmProposal(req: AuthRequest, res: Response) {
 
     if (proposal.status !== 'PENDING') return res.status(400).json({ error: 'Đề xuất đã được xử lý' })
     if (proposal.expiresAt < new Date()) return res.status(400).json({ error: 'Đề xuất đã hết hạn' })
-    if (proposal.confirmationCode !== code) return res.status(400).json({ error: 'Mã xác nhận không đúng' })
     let walletId: string | undefined
 
     if (recurring.walletType === 'SHARED') {

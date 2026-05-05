@@ -9,8 +9,10 @@ function getIO(req: AuthRequest): Server | null {
 
 export async function getTransactions(req: AuthRequest, res: Response) {
   try {
-    const { walletType, startDate, endDate, categoryId } = req.query
+    const { walletType, startDate, endDate, categoryId, page, limit } = req.query
     const userId = req.userId!
+    const pageNum = Math.max(0, parseInt(page as string) || 0)
+    const pageSize = Math.min(200, Math.max(1, parseInt(limit as string) || 50))
 
     let walletId: string | undefined
     if (walletType === 'SHARED') {
@@ -44,21 +46,33 @@ export async function getTransactions(req: AuthRequest, res: Response) {
       includeObj.logs = { orderBy: { createdAt: 'desc' }, take: 3 }
     }
 
-    const transactions = await prisma.transaction.findMany({
-      where,
-      include: includeObj as any,
-      orderBy: { date: 'desc' },
-    })
+    const [transactions, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where,
+        include: includeObj as any,
+        orderBy: { date: 'desc' },
+        skip: pageNum * pageSize,
+        take: pageSize + 1,
+      }),
+      prisma.transaction.count({ where }),
+    ])
 
-    res.json(transactions)
+    const hasMore = transactions.length > pageSize
+    if (hasMore) transactions.pop()
+
+    res.json({ transactions, hasMore, total })
   } catch {
     res.status(500).json({ error: 'Lỗi server' })
   }
 }
 
+function pocketDelta(amount: number, type: string) {
+  return type === 'INCOME' ? amount : -amount
+}
+
 export async function createTransaction(req: AuthRequest, res: Response) {
   try {
-    const { amount, type, date, note, categoryId, walletType } = req.body
+    const { amount, type, date, note, categoryId, walletType, pocketId } = req.body
     const userId = req.userId!
 
     if (!amount || !type || !date || !categoryId || !walletType) {
@@ -95,6 +109,13 @@ export async function createTransaction(req: AuthRequest, res: Response) {
 
     const actor = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } })
 
+    // Validate pocketId belongs to this wallet (personal only)
+    let resolvedPocketId: string | null = null
+    if (pocketId && walletType !== 'SHARED') {
+      const pocket = await (prisma as any).walletPocket.findFirst({ where: { id: pocketId, walletId } })
+      if (pocket) resolvedPocketId = pocketId
+    }
+
     const transaction = await prisma.transaction.create({
       data: {
         amount: parsedAmount,
@@ -104,6 +125,7 @@ export async function createTransaction(req: AuthRequest, res: Response) {
         walletId,
         categoryId,
         userId,
+        pocketId: resolvedPocketId,
         logs: {
           create: {
             action: 'created',
@@ -112,13 +134,20 @@ export async function createTransaction(req: AuthRequest, res: Response) {
             snapshot: '{}',
           },
         },
-      },
+      } as any,
       include: {
         category: true,
         user: { select: { id: true, name: true } },
         logs: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
     })
+
+    if (resolvedPocketId) {
+      await (prisma as any).walletPocket.update({
+        where: { id: resolvedPocketId },
+        data: { balance: { increment: pocketDelta(parsedAmount, type) } },
+      })
+    }
 
     if (walletType === 'SHARED' && req.familyId) {
       const io = getIO(req)
@@ -134,7 +163,7 @@ export async function createTransaction(req: AuthRequest, res: Response) {
 export async function updateTransaction(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params
-    const { amount, type, date, note, categoryId } = req.body
+    const { amount, type, date, note, categoryId, pocketId } = req.body
     const userId = req.userId!
 
     const parsedAmount = parseFloat(amount)
@@ -153,17 +182,35 @@ export async function updateTransaction(req: AuthRequest, res: Response) {
 
     let isPersonal = true
     const updated = await prisma.$transaction(async (tx) => {
-      const existing = await tx.transaction.findUnique({ where: { id }, include: { wallet: true } })
+      const existing = await (tx as any).transaction.findUnique({ where: { id }, include: { wallet: true } })
       if (!existing || existing.deletedAt) throw Object.assign(new Error(), { status: 404, msg: 'Không tìm thấy giao dịch' })
 
       isPersonal = existing.wallet.type === 'PERSONAL'
       if (isPersonal && existing.userId !== userId) throw Object.assign(new Error(), { status: 403, msg: 'Không có quyền' })
       if (!isPersonal && existing.wallet.familyId !== req.familyId) throw Object.assign(new Error(), { status: 403, msg: 'Không có quyền' })
 
-      return tx.transaction.update({
+      // Adjust pocket balances: reverse old, apply new
+      const oldPocketId: string | null = existing.pocketId ?? null
+      const newPocketId: string | null = isPersonal && pocketId ? pocketId : null
+
+      if (oldPocketId) {
+        await (tx as any).walletPocket.update({
+          where: { id: oldPocketId },
+          data: { balance: { increment: -pocketDelta(existing.amount, existing.type) } },
+        })
+      }
+      if (newPocketId) {
+        await (tx as any).walletPocket.update({
+          where: { id: newPocketId },
+          data: { balance: { increment: pocketDelta(parsedAmount, type) } },
+        })
+      }
+
+      return (tx as any).transaction.update({
         where: { id },
         data: {
           amount: parsedAmount, type, date: parsedDate, note: note?.trim() || null, categoryId,
+          pocketId: newPocketId,
           logs: {
             create: {
               action: 'updated',
@@ -207,17 +254,26 @@ export async function deleteTransaction(req: AuthRequest, res: Response) {
 
     let isPersonal = true
     await prisma.$transaction(async (tx) => {
-      const existing = await tx.transaction.findUnique({ where: { id }, include: { wallet: true } })
+      const existing = await (tx as any).transaction.findUnique({ where: { id }, include: { wallet: true } })
       if (!existing || existing.deletedAt) throw Object.assign(new Error(), { status: 404, msg: 'Không tìm thấy giao dịch' })
 
       isPersonal = existing.wallet.type === 'PERSONAL'
       if (isPersonal && existing.userId !== userId) throw Object.assign(new Error(), { status: 403, msg: 'Không có quyền' })
       if (!isPersonal && existing.wallet.familyId !== req.familyId) throw Object.assign(new Error(), { status: 403, msg: 'Không có quyền' })
 
-      await tx.transaction.update({
+      // Reverse pocket balance before soft-delete
+      if (existing.pocketId) {
+        await (tx as any).walletPocket.update({
+          where: { id: existing.pocketId },
+          data: { balance: { increment: -pocketDelta(existing.amount, existing.type) } },
+        })
+      }
+
+      await (tx as any).transaction.update({
         where: { id },
         data: {
           deletedAt: new Date(),
+          pocketId: null,
           logs: {
             create: {
               action: 'deleted',
@@ -342,10 +398,150 @@ export async function setInitialBalance(req: AuthRequest, res: Response) {
   }
 }
 
-export async function getCategories(_req: AuthRequest, res: Response) {
+export async function exportTransactions(req: AuthRequest, res: Response) {
   try {
-    const categories = await prisma.category.findMany({ orderBy: { name: 'asc' } })
+    const { walletType, startDate, endDate } = req.query
+    const userId = req.userId!
+
+    let walletId: string | undefined
+    if (walletType === 'SHARED') {
+      if (!req.familyId) return res.status(400).json({ error: 'Chưa vào gia đình' })
+      const wallet = await prisma.wallet.findUnique({ where: { familyId: req.familyId } })
+      walletId = wallet?.id
+    } else {
+      const wallet = await prisma.wallet.findUnique({ where: { userId } })
+      walletId = wallet?.id
+    }
+
+    if (!walletId) {
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+      return res.send('﻿Ngày,Loại,Danh mục,Số tiền,Ghi chú\n')
+    }
+
+    const where: any = { walletId, deletedAt: null }
+    if (startDate || endDate) {
+      where.date = {}
+      if (startDate) where.date.gte = new Date(startDate as string)
+      if (endDate) {
+        const end = new Date(endDate as string)
+        end.setUTCHours(23, 59, 59, 999)
+        where.date.lte = end
+      }
+    }
+
+    const transactions = await prisma.transaction.findMany({
+      where,
+      include: {
+        category: true,
+        user: { select: { name: true } },
+      },
+      orderBy: { date: 'desc' },
+    })
+
+    const escape = (s: string) => `"${(s ?? '').replace(/"/g, '""')}"`
+
+    const rows = transactions.map(t => {
+      const d = new Date(t.date.getTime() + VN_OFFSET)
+      const day = String(d.getUTCDate()).padStart(2, '0')
+      const mon = String(d.getUTCMonth() + 1).padStart(2, '0')
+      const yr = d.getUTCFullYear()
+      const dateStr = `${day}/${mon}/${yr}`
+      const typeStr = t.type === 'INCOME' ? 'Thu' : 'Chi'
+      return [dateStr, typeStr, escape(t.category.name), t.amount, escape(t.note ?? '')].join(',')
+    })
+
+    const month = startDate ? new Date(startDate as string).getMonth() + 1 : new Date().getMonth() + 1
+    const year = startDate ? new Date(startDate as string).getFullYear() : new Date().getFullYear()
+    const filename = `giao-dich-${walletType === 'SHARED' ? 'quy-chung' : 'ca-nhan'}-${month}-${year}.csv`
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.send('﻿' + 'Ngày,Loại,Danh mục,Số tiền,Ghi chú\n' + rows.join('\n'))
+  } catch {
+    res.status(500).json({ error: 'Lỗi server' })
+  }
+}
+
+export async function getCategories(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.userId!
+    const categories = await (prisma.category as any).findMany({
+      where: { OR: [{ isDefault: true }, { userId }] },
+      orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+    })
     res.json(categories)
+  } catch {
+    res.status(500).json({ error: 'Lỗi server' })
+  }
+}
+
+export async function createCategory(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.userId!
+    const { name, icon, color, type } = req.body
+
+    if (!name?.trim()) return res.status(400).json({ error: 'Cần nhập tên danh mục' })
+    if (!icon?.trim()) return res.status(400).json({ error: 'Cần chọn icon' })
+    if (!color?.trim()) return res.status(400).json({ error: 'Cần chọn màu' })
+    if (!['INCOME', 'EXPENSE'].includes(type)) return res.status(400).json({ error: 'Loại không hợp lệ' })
+
+    const exists = await (prisma.category as any).findFirst({ where: { name: name.trim(), userId } })
+    if (exists) return res.status(400).json({ error: 'Danh mục này đã tồn tại' })
+
+    const category = await (prisma.category as any).create({
+      data: { name: name.trim(), icon: icon.trim(), color: color.trim(), type, userId },
+    })
+    res.status(201).json(category)
+  } catch {
+    res.status(500).json({ error: 'Lỗi server' })
+  }
+}
+
+export async function updateCategory(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.userId!
+    const { id } = req.params
+    const { name, icon, color } = req.body
+
+    const existing = await (prisma.category as any).findUnique({ where: { id } })
+    if (!existing) return res.status(404).json({ error: 'Không tìm thấy danh mục' })
+    if (existing.isDefault) return res.status(403).json({ error: 'Không thể sửa danh mục mặc định' })
+    if (existing.userId !== userId) return res.status(403).json({ error: 'Không có quyền' })
+
+    if (name?.trim() && name.trim() !== existing.name) {
+      const dup = await (prisma.category as any).findFirst({ where: { name: name.trim(), userId } })
+      if (dup) return res.status(400).json({ error: 'Tên danh mục đã tồn tại' })
+    }
+
+    const updated = await prisma.category.update({
+      where: { id },
+      data: {
+        ...(name?.trim() && { name: name.trim() }),
+        ...(icon?.trim() && { icon: icon.trim() }),
+        ...(color?.trim() && { color: color.trim() }),
+      },
+    })
+    res.json(updated)
+  } catch {
+    res.status(500).json({ error: 'Lỗi server' })
+  }
+}
+
+export async function deleteCategory(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.userId!
+    const { id } = req.params
+
+    const existing = await (prisma.category as any).findUnique({ where: { id } })
+    if (!existing) return res.status(404).json({ error: 'Không tìm thấy danh mục' })
+    if (existing.isDefault) return res.status(403).json({ error: 'Không thể xóa danh mục mặc định' })
+    if (existing.userId !== userId) return res.status(403).json({ error: 'Không có quyền' })
+
+    const txCount = await prisma.transaction.count({ where: { categoryId: id, deletedAt: null } })
+    if (txCount > 0) return res.status(400).json({ error: `Không thể xóa — đang dùng bởi ${txCount} giao dịch` })
+
+    await prisma.category.delete({ where: { id } })
+    res.json({ success: true })
   } catch {
     res.status(500).json({ error: 'Lỗi server' })
   }

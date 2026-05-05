@@ -12,6 +12,8 @@ export default function LoginForm({ onSwitch, onForgot }: Props) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const sessionExpired = sessionStorage.getItem('session_expired') === '1'
+  if (sessionExpired) sessionStorage.removeItem('session_expired')
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -34,6 +36,11 @@ export default function LoginForm({ onSwitch, onForgot }: Props) {
           <p className="text-gray-500 text-sm mt-1">Gia đình</p>
         </div>
 
+        {sessionExpired && (
+          <div className="bg-amber-50 text-amber-700 text-sm px-4 py-3 rounded-lg mb-4">
+            Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.
+          </div>
+        )}
         {error && <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg mb-4">{error}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-4">

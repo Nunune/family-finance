@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import { WalletType, Transaction, Summary, Category } from '../types'
+import { WalletType, Transaction, Summary, Category, WalletPocket } from '../types'
 import api from '../services/api'
 import TransactionList from '../components/Transaction/TransactionList'
 import TransactionForm from '../components/Transaction/TransactionForm'
 import QuickAdd from '../components/Transaction/QuickAdd'
 import DailyBarChart from '../components/Charts/DailyBarChart'
 import CategoryPieChart from '../components/Charts/CategoryPieChart'
+import PocketManager from '../components/Pocket/PocketManager'
 import { useSocket } from '../contexts/SocketContext'
 import { useAuth } from '../contexts/AuthContext'
 import { format } from 'date-fns'
@@ -27,34 +28,54 @@ export default function WalletPage({ walletType }: Props) {
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [year, setYear] = useState(now.getFullYear())
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [hasMore, setHasMore] = useState(false)
+  const [page, setPage] = useState(0)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
+  const [pockets, setPockets] = useState<WalletPocket[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [showPocketManager, setShowPocketManager] = useState(false)
 
   const [showBalanceModal, setShowBalanceModal] = useState(false)
   const [balanceInput, setBalanceInput] = useState('')
   const [savingBalance, setSavingBalance] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const startDate = `${year}-${String(month).padStart(2, '0')}-01`
   const endDate = format(new Date(year, month, 0), 'yyyy-MM-dd')
 
   const load = useCallback(async () => {
     setLoading(true)
+    setPage(0)
     try {
       const [txRes, sumRes] = await Promise.all([
-        api.get('/transactions', { params: { walletType, startDate, endDate } }),
+        api.get('/transactions', { params: { walletType, startDate, endDate, page: 0, limit: 50 } }),
         api.get('/transactions/summary/stats', { params: { walletType, month, year } }),
       ])
-      setTransactions(txRes.data)
+      setTransactions(txRes.data.transactions)
+      setHasMore(txRes.data.hasMore)
       setSummary(sumRes.data)
     } finally { setLoading(false) }
   }, [walletType, startDate, endDate, month, year])
 
+  async function loadMore() {
+    const nextPage = page + 1
+    setLoadingMore(true)
+    try {
+      const res = await api.get('/transactions', { params: { walletType, startDate, endDate, page: nextPage, limit: 50 } })
+      setTransactions(prev => [...prev, ...res.data.transactions])
+      setHasMore(res.data.hasMore)
+      setPage(nextPage)
+    } finally { setLoadingMore(false) }
+  }
+
   useEffect(() => {
     api.get('/transactions/categories/all').then(r => setCategories(r.data))
-  }, [])
+    if (!isShared) api.get('/pockets').then(r => setPockets(r.data))
+  }, [isShared])
 
   useEffect(() => { load() }, [load])
 
@@ -102,6 +123,26 @@ export default function WalletPage({ walletType }: Props) {
     setShowBalanceModal(true)
   }
 
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const res = await api.get('/transactions/export/csv', {
+        params: { walletType, startDate, endDate },
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'text/csv;charset=utf-8' }))
+      const a = document.createElement('a')
+      const cd = res.headers['content-disposition'] ?? ''
+      const match = cd.match(/filename="?([^"]+)"?/)
+      a.href = url
+      a.download = match?.[1] ?? `giao-dich-${month}-${year}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   function prevMonth() {
     if (month === 1) { setMonth(12); setYear(y => y - 1) }
     else setMonth(m => m - 1)
@@ -114,7 +155,7 @@ export default function WalletPage({ walletType }: Props) {
   const canEditBalance = !isShared || user?.role === 'ADMIN'
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 pt-6 pb-24 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-800">
@@ -131,26 +172,78 @@ export default function WalletPage({ walletType }: Props) {
       </div>
 
       {/* Total wallet balance */}
-      {summary && (
-        <div className={`rounded-2xl p-5 flex items-center justify-between ${
-          summary.walletBalance >= 0 ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-gradient-to-r from-orange-400 to-red-400'
-        } text-white`}>
-          <div>
-            <p className="text-sm opacity-80">Số dư hiện tại</p>
-            <p className="text-2xl font-bold mt-0.5">{formatVND(summary.walletBalance)}</p>
-            {summary.initialBalance > 0 && (
-              <p className="text-xs opacity-70 mt-1">Bao gồm số dư ban đầu: {formatVND(summary.initialBalance)}</p>
-            )}
-            {summary.initialBalance === 0 && canEditBalance && (
-              <p className="text-xs opacity-70 mt-1">Chưa thiết lập số dư ban đầu</p>
-            )}
+      {summary && (() => {
+        const hiddenBalance = !isShared
+          ? pockets.filter(p => p.isHidden).reduce((s, p) => s + p.balance, 0)
+          : 0
+        const availableBalance = summary.walletBalance - hiddenBalance
+        return (
+          <div className={`rounded-2xl p-5 ${
+            summary.walletBalance >= 0 ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-gradient-to-r from-orange-400 to-red-400'
+          } text-white`}>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm opacity-80">{hiddenBalance > 0 ? 'Tổng số dư' : 'Số dư hiện tại'}</p>
+                <p className="text-2xl font-bold mt-0.5">{formatVND(summary.walletBalance)}</p>
+                {hiddenBalance > 0 && (
+                  <div className="mt-1.5 space-y-0.5">
+                    <p className="text-xs opacity-70">
+                      🔒 Đã ẩn: {formatVND(hiddenBalance)} ({pockets.filter(p => p.isHidden).map(p => p.name).join(', ')})
+                    </p>
+                    <p className="text-sm font-semibold opacity-90">
+                      Khả dụng: {formatVND(availableBalance)}
+                    </p>
+                  </div>
+                )}
+                {summary.initialBalance === 0 && canEditBalance && (
+                  <p className="text-xs opacity-70 mt-1">Chưa thiết lập số dư ban đầu</p>
+                )}
+              </div>
+              <div className="flex flex-col gap-2 items-end shrink-0">
+                {canEditBalance && (
+                  <button onClick={openBalanceModal}
+                    className="bg-white/20 hover:bg-white/30 transition rounded-xl px-3 py-2 text-xs font-medium">
+                    ⚙ Thiết lập
+                  </button>
+                )}
+                {!isShared && (
+                  <button onClick={() => setShowPocketManager(true)}
+                    className="bg-white/20 hover:bg-white/30 transition rounded-xl px-3 py-2 text-xs font-medium">
+                    🗂 Ví tiền
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
-          {canEditBalance && (
-            <button onClick={openBalanceModal}
-              className="bg-white/20 hover:bg-white/30 transition rounded-xl px-3 py-2 text-xs font-medium">
-              ⚙ Thiết lập
-            </button>
-          )}
+        )
+      })()}
+
+      {/* Pocket cards — personal only */}
+      {!isShared && pockets.length > 0 && (
+        <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+          {pockets.map(pocket => (
+            <div
+              key={pocket.id}
+              className="shrink-0 bg-white rounded-2xl border border-gray-100 p-3 w-36 cursor-pointer hover:border-gray-200 transition"
+              onClick={() => setShowPocketManager(true)}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xl">{pocket.icon}</span>
+                {pocket.isHidden && <span className="text-gray-400 text-xs">🔒</span>}
+              </div>
+              <p className="text-xs text-gray-500 truncate">{pocket.name}</p>
+              <p className="text-sm font-bold text-gray-800 mt-0.5"
+                style={{ color: pocket.balance < 0 ? '#EF4444' : undefined }}>
+                {pocket.balance.toLocaleString('vi-VN')}₫
+              </p>
+            </div>
+          ))}
+          <button
+            onClick={() => setShowPocketManager(true)}
+            className="shrink-0 w-20 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-300 hover:border-emerald-300 hover:text-emerald-400 transition text-2xl"
+          >
+            +
+          </button>
         </div>
       )}
 
@@ -199,25 +292,59 @@ export default function WalletPage({ walletType }: Props) {
 
       {/* Transactions */}
       <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Giao dịch</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-700">Giao dịch</h3>
+          {transactions.length > 0 && (
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-emerald-600 border border-gray-200 hover:border-emerald-300 px-2.5 py-1.5 rounded-lg transition disabled:opacity-50"
+            >
+              <span>⬇</span>
+              {exporting ? 'Đang xuất...' : 'Xuất CSV'}
+            </button>
+          )}
+        </div>
         {loading ? (
           <div className="text-center py-8 text-gray-400 text-sm">Đang tải...</div>
         ) : (
-          <TransactionList
-            transactions={transactions}
-            onEdit={t => { setEditing(t); setShowForm(true) }}
-            onDelete={handleDelete}
-            showUser={isShared}
-          />
+          <>
+            <TransactionList
+              transactions={transactions}
+              onEdit={t => { setEditing(t); setShowForm(true) }}
+              onDelete={handleDelete}
+              showUser={isShared}
+            />
+            {hasMore && (
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="w-full mt-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                {loadingMore ? 'Đang tải...' : 'Xem thêm'}
+              </button>
+            )}
+          </>
         )}
       </div>
 
       {showForm && (
         <TransactionForm
           walletType={walletType}
+          pockets={pockets}
           editing={editing}
           onSuccess={() => { setShowForm(false); setEditing(null); load() }}
           onCancel={() => { setShowForm(false); setEditing(null) }}
+        />
+      )}
+
+      {showPocketManager && (
+        <PocketManager
+          pockets={pockets}
+          onCreate={p => setPockets(prev => [...prev, p])}
+          onUpdate={p => setPockets(prev => prev.map(x => x.id === p.id ? p : x))}
+          onDelete={id => setPockets(prev => prev.filter(x => x.id !== id))}
+          onClose={() => setShowPocketManager(false)}
         />
       )}
 

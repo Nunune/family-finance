@@ -1,8 +1,8 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm ci && npm run build"
+nixpacksConfigPath = "nixpacks.toml"
 
 [deploy]
-startCommand = "npm run db:deploy && npm start"
+startCommand = "cd server && npm run db:deploy && npm start"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3

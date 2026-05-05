@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import api from '../services/api'
 import { WalletType } from '../types'
 
@@ -31,6 +31,8 @@ function saveQueue(q: QueuedTx[]) {
 export function useOfflineQueue(onSynced?: () => void) {
   const [queue, setQueue] = useState<QueuedTx[]>(loadQueue)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const lastSyncRef = useRef<number>(0)
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const up = () => setIsOnline(true)
@@ -80,10 +82,21 @@ export function useOfflineQueue(onSynced?: () => void) {
     }
   }, [onSynced])
 
+  const debouncedSync = useCallback(() => {
+    const now = Date.now()
+    if (now - lastSyncRef.current < 2000) {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
+      syncTimerRef.current = setTimeout(() => { lastSyncRef.current = Date.now(); sync() }, 2000)
+      return
+    }
+    lastSyncRef.current = now
+    sync()
+  }, [sync])
+
   // Auto-sync khi có mạng trở lại
   useEffect(() => {
-    if (isOnline) sync()
-  }, [isOnline, sync])
+    if (isOnline) debouncedSync()
+  }, [isOnline, debouncedSync])
 
   function enqueue(item: Omit<QueuedTx, 'queuedAt' | 'status'>): void {
     const entry: QueuedTx = { ...item, queuedAt: new Date().toISOString(), status: 'pending' }
@@ -91,7 +104,7 @@ export function useOfflineQueue(onSynced?: () => void) {
     saveQueue(updated)
     setQueue(updated)
 
-    if (isOnline) sync()
+    if (isOnline) debouncedSync()
   }
 
   const pendingCount = queue.filter(q => q.status === 'pending' || q.status === 'syncing').length

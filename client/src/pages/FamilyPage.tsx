@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useSocket } from '../contexts/SocketContext'
 import api from '../services/api'
 import { Family } from '../types'
 import FamilySetup from '../components/Family/FamilySetup'
@@ -15,6 +16,7 @@ interface Invite {
 
 export default function FamilyPage() {
   const { user } = useAuth()
+  const { socket } = useSocket()
   const [family, setFamily] = useState<Family | null>(null)
   const [invites, setInvites] = useState<Invite[]>([])
   const [showCreateInvite, setShowCreateInvite] = useState(false)
@@ -24,14 +26,27 @@ export default function FamilyPage() {
   const [inviteLoading, setInviteLoading] = useState(false)
   const [newInvite, setNewInvite] = useState<Invite | null>(null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
 
-  useEffect(() => {
+  const loadFamily = useCallback(() => {
     if (!user?.familyId) return
     api.get('/auth/family').then(r => setFamily(r.data)).catch(() => {})
     if (user.role === 'ADMIN') {
       api.get('/auth/family/invites').then(r => setInvites(r.data)).catch(() => {})
     }
   }, [user])
+
+  useEffect(() => { loadFamily() }, [loadFamily])
+
+  useEffect(() => {
+    if (!socket) return
+    socket.on('family:member_joined', loadFamily)
+    socket.on('family:member_left', loadFamily)
+    return () => {
+      socket.off('family:member_joined', loadFamily)
+      socket.off('family:member_left', loadFamily)
+    }
+  }, [socket, loadFamily])
 
   if (!user?.familyId) return <FamilySetup />
 
@@ -54,6 +69,23 @@ export default function FamilyPage() {
     await api.delete(`/auth/family/invite/${code}`)
     setInvites(prev => prev.filter(i => i.inviteCode !== code))
     if (newInvite?.inviteCode === code) setNewInvite(null)
+  }
+
+  async function handleExportBackup() {
+    setExporting(true)
+    try {
+      const res = await api.get('/admin/export', { responseType: 'blob' })
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/json' }))
+      const a = document.createElement('a')
+      const cd = res.headers['content-disposition'] ?? ''
+      const match = cd.match(/filename="?([^"]+)"?/)
+      a.href = url
+      a.download = match?.[1] ?? `backup-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
   }
 
   function copy(text: string, field: string) {
@@ -182,6 +214,23 @@ export default function FamilyPage() {
                 ))}
             </div>
           )}
+        </div>
+      )}
+
+      {user.role === 'ADMIN' && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <h3 className="font-semibold text-gray-800 mb-1">Sao lưu dữ liệu</h3>
+          <p className="text-xs text-gray-500 mb-3">
+            Xuất toàn bộ giao dịch, nợ, quỹ tiết kiệm ra file JSON. Nên backup định kỳ hàng tuần.
+          </p>
+          <button
+            onClick={handleExportBackup}
+            disabled={exporting}
+            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition disabled:opacity-50"
+          >
+            <span>⬇</span>
+            {exporting ? 'Đang xuất...' : 'Tải backup (.json)'}
+          </button>
         </div>
       )}
 

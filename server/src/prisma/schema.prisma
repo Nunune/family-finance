@@ -54,6 +54,7 @@ model User {
   debtPayments         DebtPayment[]
   recurrings           RecurringTransaction[]
   savingsGoals         SavingsGoal[]
+  categories           Category[]
   savingsContribs      SavingsContribution[]
   withdrawalRequests   SavingsWithdrawalRequest[]  @relation("WithdrawalRequester")
   withdrawalApprovals  SavingsWithdrawalApproval[]
@@ -70,17 +71,38 @@ model Wallet {
   family         Family?       @relation("SharedWallet", fields: [familyId], references: [id])
   transactions   Transaction[]
   debts          Debt[]
+  pockets        WalletPocket[]
+}
+
+model WalletPocket {
+  id           String        @id @default(cuid())
+  walletId     String
+  name         String
+  icon         String        @default("💰")
+  color        String        @default("#6B7280")
+  balance      Float         @default(0)
+  isHidden     Boolean       @default(false)
+  order        Int           @default(0)
+  wallet       Wallet        @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+
+  @@index([walletId])
 }
 
 model Category {
   id           String                 @id @default(cuid())
-  name         String                 @unique
+  name         String
   icon         String
   color        String
   type         String
   isDefault    Boolean                @default(false)
+  userId       String?
+  user         User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   recurrings   RecurringTransaction[]
+
+  @@unique([name, userId])
 }
 
 model IdempotencyKey {
@@ -100,10 +122,12 @@ model Transaction {
   walletId    String
   categoryId  String
   userId      String
+  pocketId    String?
   deletedAt   DateTime?
   wallet      Wallet           @relation(fields: [walletId], references: [id])
   category    Category         @relation(fields: [categoryId], references: [id])
   user        User             @relation(fields: [userId], references: [id])
+  pocket      WalletPocket?    @relation(fields: [pocketId], references: [id], onDelete: SetNull)
   logs        TransactionLog[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
@@ -147,11 +171,12 @@ model Debt {
   counterparty    String       // Tên ngân hàng / người
   note            String?
   dueDate         DateTime?
-  ownerId         String
-  lenderUserId    String?      // Chỉ cho INTERNAL
-  borrowerUserId  String?      // Chỉ cho INTERNAL
-  walletId        String?
-  familyId        String?
+  ownerId              String
+  lenderUserId         String?      // Chỉ cho INTERNAL
+  borrowerUserId       String?      // Chỉ cho INTERNAL
+  walletId             String?
+  familyId             String?
+  walletTransactionId  String?      // Transaction tạo khi ghi nợ (để xóa khi undo)
   owner           User         @relation("DebtOwner",    fields: [ownerId],        references: [id])
   lender          User?        @relation("DebtLender",   fields: [lenderUserId],   references: [id], onDelete: SetNull)
   borrower        User?        @relation("DebtBorrower", fields: [borrowerUserId], references: [id], onDelete: SetNull)
@@ -182,7 +207,8 @@ model DebtPayment {
   amount       Float
   date         DateTime
   note         String?
-  paidByUserId String
+  paidByUserId        String
+  walletTransactionId String?      // Transaction tạo khi ghi thanh toán (để xóa khi undo)
   debt         Debt     @relation(fields: [debtId], references: [id], onDelete: Cascade)
   paidBy       User     @relation(fields: [paidByUserId], references: [id])
   createdAt    DateTime @default(now())

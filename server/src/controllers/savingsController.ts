@@ -211,8 +211,19 @@ export async function deleteContribution(req: AuthRequest, res: Response) {
       include: { goal: true },
     })
     if (!contrib || contrib.goalId !== id) return res.status(404).json({ error: 'Không tìm thấy' })
-    if (contrib.goal.ownerId !== userId && contrib.userId !== userId) {
+
+    const isGoalOwner = contrib.goal.ownerId === userId
+    const isContribOwner = contrib.userId === userId
+    if (!isGoalOwner && !isContribOwner) {
       return res.status(403).json({ error: 'Không có quyền' })
+    }
+
+    // Với quỹ chung: xác minh user vẫn còn thuộc gia đình đó
+    if (contrib.goal.isShared && contrib.goal.familyId) {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { familyId: true } })
+      if (user?.familyId !== contrib.goal.familyId) {
+        return res.status(403).json({ error: 'Không có quyền' })
+      }
     }
 
     const delta = contrib.type === 'WITHDRAWAL' ? contrib.amount : -contrib.amount
@@ -220,7 +231,14 @@ export async function deleteContribution(req: AuthRequest, res: Response) {
     await prisma.$transaction(async (tx) => {
       const claimed = await tx.savingsContribution.deleteMany({ where: { id: cid } })
       if (claimed.count === 0) throw Object.assign(new Error(), { status: 404, msg: 'Không tìm thấy' })
-      await tx.savingsGoal.update({ where: { id }, data: { savedAmount: { increment: delta } } })
+      const fresh = await tx.savingsGoal.findUnique({ where: { id } })
+      if (fresh) {
+        const newSaved = fresh.savedAmount + delta
+        await tx.savingsGoal.update({
+          where: { id },
+          data: { savedAmount: newSaved, isCompleted: newSaved >= fresh.targetAmount },
+        })
+      }
     })
 
     res.json({ ok: true })
