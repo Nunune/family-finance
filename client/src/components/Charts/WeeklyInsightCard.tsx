@@ -207,7 +207,7 @@ export default function WeeklyInsightCard({ walletType = 'PERSONAL' }: { walletT
         <div className="flex items-center gap-2">
           {data.alert && (
             <span className={`text-xs font-medium px-2 py-1 rounded-full ${cfg.badge}`}>
-              {cfg.icon} {data.alert === 'HIGH' ? 'Cao bất thường' : data.alert === 'MODERATE' ? 'Cao hơn TB' : data.alert === 'GOOD' ? 'Tiết kiệm' : 'Bình thường'}
+              {cfg.icon} {data.alert === 'HIGH' ? 'Khét ví rồi!' : data.alert === 'MODERATE' ? 'Ví sắp cháy' : data.alert === 'GOOD' ? 'Sắp giàu rồi' : 'Quá ổn áp'}
             </span>
           )}
           {walletType === 'PERSONAL' && (
