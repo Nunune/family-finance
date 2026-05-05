@@ -297,6 +297,23 @@ export async function deleteTransaction(req: AuthRequest, res: Response) {
           },
         },
       })
+
+      // Cascade: if this tx was linked to a Debt creation, delete the debt
+      const linkedDebt = await (tx as any).debt.findFirst({ where: { walletTransactionId: id } })
+      if (linkedDebt) {
+        await (tx as any).debtPayment.deleteMany({ where: { debtId: linkedDebt.id } })
+        await (tx as any).debt.delete({ where: { id: linkedDebt.id } })
+      }
+
+      // Cascade: if this tx was linked to a DebtPayment, remove the payment and restore remainingAmount
+      const linkedPayment = await (tx as any).debtPayment.findFirst({ where: { walletTransactionId: id } })
+      if (linkedPayment) {
+        await (tx as any).debt.update({
+          where: { id: linkedPayment.debtId },
+          data: { remainingAmount: { increment: linkedPayment.amount } },
+        })
+        await (tx as any).debtPayment.delete({ where: { id: linkedPayment.id } })
+      }
     })
 
     if (!isPersonal && req.familyId) {
