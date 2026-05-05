@@ -110,9 +110,9 @@ export default function PlanItemList() {
 
       {/* Month navigation */}
       <div className="flex items-center justify-between">
-        <button onClick={prevMonth} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500">‹</button>
+        <button onClick={prevMonth} className="w-11 h-11 flex items-center justify-center rounded-2xl bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-600 text-xl font-bold transition-all">‹</button>
         <h3 className="font-semibold text-gray-800">{MONTH_NAMES[month - 1]} {year}</h3>
-        <button onClick={nextMonth} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500">›</button>
+        <button onClick={nextMonth} className="w-11 h-11 flex items-center justify-center rounded-2xl bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-600 text-xl font-bold transition-all">›</button>
       </div>
 
       {/* Summary card */}

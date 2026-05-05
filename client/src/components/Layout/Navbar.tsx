@@ -1,8 +1,16 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { usePendingProposals } from '../../contexts/ProposalContext'
 import EditProfileModal from '../Auth/EditProfileModal'
+import api from '../../services/api'
+
+const DAY_NAMES = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7']
+
+function todayLabel() {
+  const d = new Date()
+  return `${DAY_NAMES[d.getDay()]}, ${d.getDate()}/${d.getMonth() + 1}`
+}
 
 export default function Navbar() {
   const { user, logout, logoutAll, tokenExpiring, dismissExpiryWarning } = useAuth()
@@ -11,6 +19,14 @@ export default function Navbar() {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showEditProfile, setShowEditProfile] = useState(false)
   const [fontScale, setFontScale] = useState(() => localStorage.getItem('fontScale') || 'md')
+  const [planReminders, setPlanReminders] = useState(0)
+
+  useEffect(() => {
+    if (!user) return
+    api.get('/plan-items/reminders').then(r => setPlanReminders(r.data.length)).catch(() => {})
+  }, [user])
+
+  const totalAlerts = pendingProposals + planReminders
 
   function applyFontScale(scale: string) {
     const sizes: Record<string, string> = { sm: '14px', md: '16px', lg: '18px', xl: '20px' }
@@ -30,8 +46,13 @@ export default function Navbar() {
 
       <nav className="bg-white border-b border-gray-100 sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-14">
-          <div className="flex items-center gap-1 font-bold text-emerald-600 text-lg">
-            💰 <span className="hidden sm:inline">Thu Chi Gia Đình</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 font-bold text-emerald-600 text-lg">
+              💰 <span className="hidden sm:inline">Thu Chi Gia Đình</span>
+            </div>
+            <span className="hidden md:inline text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-lg">
+              📅 {todayLabel()}
+            </span>
           </div>
 
           <div className="hidden sm:flex items-center gap-1">
@@ -66,6 +87,16 @@ export default function Navbar() {
           </div>
 
           <div className="relative flex items-center gap-2">
+            {/* Notification bell */}
+            <NavLink to="/plans" className="relative w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 transition-colors">
+              🔔
+              {totalAlerts > 0 && (
+                <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+                  {totalAlerts}
+                </span>
+              )}
+            </NavLink>
+
             <button
               onClick={() => setShowUserMenu(v => !v)}
               className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 transition px-2 py-1 rounded-lg hover:bg-gray-50"

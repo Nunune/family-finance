@@ -253,10 +253,10 @@ export default function WalletPage({ walletType }: Props) {
       )}
 
       {/* Month nav */}
-      <div className="flex items-center justify-center gap-4">
-        <button onClick={prevMonth} className="text-gray-400 hover:text-gray-700 text-lg px-2">‹</button>
-        <span className="text-base font-semibold text-gray-700">Tháng {month}/{year}</span>
-        <button onClick={nextMonth} className="text-gray-400 hover:text-gray-700 text-lg px-2">›</button>
+      <div className="flex items-center justify-center gap-3">
+        <button onClick={prevMonth} className="w-11 h-11 flex items-center justify-center rounded-2xl bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-600 text-xl font-bold transition-all">‹</button>
+        <span className="text-base font-semibold text-gray-700 min-w-[120px] text-center">Tháng {month}/{year}</span>
+        <button onClick={nextMonth} className="w-11 h-11 flex items-center justify-center rounded-2xl bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-600 text-xl font-bold transition-all">›</button>
       </div>
 
       {/* Monthly summary cards */}
