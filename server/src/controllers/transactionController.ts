@@ -546,3 +546,114 @@ export async function deleteCategory(req: AuthRequest, res: Response) {
     res.status(500).json({ error: 'Lỗi server' })
   }
 }
+
+export async function getWeeklySummary(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.userId!
+    const walletType = (req.query.walletType as string) || 'PERSONAL'
+
+    let walletId: string | undefined
+    if (walletType === 'SHARED') {
+      if (!req.familyId) return res.status(400).json({ error: 'Chưa vào gia đình' })
+      const wallet = await prisma.wallet.findUnique({ where: { familyId: req.familyId } })
+      walletId = wallet?.id
+    } else {
+      const wallet = await prisma.wallet.findUnique({ where: { userId } })
+      walletId = wallet?.id
+    }
+    if (!walletId) return res.json({ weeks: [], thisWeek: 0, avgExpense: 0, ratio: 1, alert: null, topCategories: [] })
+
+    // Tuần bắt đầu từ thứ Hai
+    const now = new Date()
+    const todayDay = now.getDay() // 0=CN, 1=T2...6=T7
+    const daysFromMonday = todayDay === 0 ? 6 : todayDay - 1
+
+    const thisWeekStart = new Date(now)
+    thisWeekStart.setDate(now.getDate() - daysFromMonday)
+    thisWeekStart.setHours(0, 0, 0, 0)
+
+    // Lấy data 4 tuần = 28 ngày từ đầu tuần hiện tại trở về trước
+    const queryStart = new Date(thisWeekStart)
+    queryStart.setDate(queryStart.getDate() - 21)
+
+    const transactions = await prisma.transaction.findMany({
+      where: { walletId, date: { gte: queryStart, lte: now }, deletedAt: null, type: 'EXPENSE' },
+      include: { category: { select: { name: true, icon: true } } },
+    })
+
+    // Xây dựng 4 tuần theo thứ tự thời gian (cũ → mới)
+    const weeks: Array<{
+      weeksAgo: number; label: string; startDate: string; endDate: string; expense: number
+    }> = []
+
+    for (let weeksAgo = 3; weeksAgo >= 0; weeksAgo--) {
+      const weekStart = new Date(thisWeekStart)
+      weekStart.setDate(thisWeekStart.getDate() - weeksAgo * 7)
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekStart.getDate() + 6)
+      weekEnd.setHours(23, 59, 59, 999)
+
+      const weekExpense = transactions
+        .filter(tx => new Date(tx.date) >= weekStart && new Date(tx.date) <= weekEnd)
+        .reduce((s, tx) => s + tx.amount, 0)
+
+      weeks.push({
+        weeksAgo,
+        label: weeksAgo === 0 ? 'Tuần này' : weeksAgo === 1 ? 'Tuần trước' : `${weeksAgo}T trước`,
+        startDate: weekStart.toISOString().slice(0, 10),
+        endDate: weekEnd.toISOString().slice(0, 10),
+        expense: weekExpense,
+      })
+    }
+
+    // weeks[3] = tuần này, weeks[0..2] = 3 tuần trước
+    const thisWeekExpense = weeks[3].expense
+    const pastWeeksAvg = (weeks[0].expense + weeks[1].expense + weeks[2].expense) / 3
+
+    const ratio = pastWeeksAvg > 0
+      ? thisWeekExpense / pastWeeksAvg
+      : thisWeekExpense > 0 ? 9 : 1 // nếu chưa có lịch sử → tỉ lệ cao
+
+    let alert: 'HIGH' | 'MODERATE' | 'NORMAL' | 'GOOD' | null = null
+    if (thisWeekExpense > 0 || pastWeeksAvg > 0) {
+      if (ratio >= 1.5) alert = 'HIGH'
+      else if (ratio >= 1.2) alert = 'MODERATE'
+      else if (pastWeeksAvg > 0 && ratio <= 0.7) alert = 'GOOD'
+      else alert = 'NORMAL'
+    }
+
+    // Top 3 danh mục tuần này
+    const catMap = new Map<string, { name: string; icon: string; amount: number }>()
+    transactions
+      .filter(tx => new Date(tx.date) >= thisWeekStart)
+      .forEach(tx => {
+        const cat = (tx as any).category
+        const key = tx.categoryId
+        const entry = catMap.get(key)
+        if (entry) entry.amount += tx.amount
+        else catMap.set(key, { name: cat?.name ?? '', icon: cat?.icon ?? '💰', amount: tx.amount })
+      })
+
+    const topCategories = Array.from(catMap.values())
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 3)
+
+    // Ước tính chi tiêu cả tuần dựa trên tốc độ hiện tại
+    const daysElapsed = daysFromMonday + 1 // số ngày đã trôi qua trong tuần (bao gồm hôm nay)
+    const projectedWeek = daysElapsed > 0 ? Math.round((thisWeekExpense / daysElapsed) * 7) : 0
+
+    res.json({
+      weeks,
+      thisWeek: thisWeekExpense,
+      avgExpense: Math.round(pastWeeksAvg),
+      ratio: Math.round(ratio * 100) / 100,
+      alert,
+      topCategories,
+      projectedWeek,
+      daysElapsed,
+    })
+  } catch (err) {
+    console.error('[getWeeklySummary]', err)
+    res.status(500).json({ error: 'Lỗi server' })
+  }
+}

@@ -4,6 +4,7 @@ import api from '../services/api'
 import { Summary, Category, TransactionProposal } from '../types'
 import DailyBarChart from '../components/Charts/DailyBarChart'
 import CategoryPieChart from '../components/Charts/CategoryPieChart'
+import WeeklyInsightCard from '../components/Charts/WeeklyInsightCard'
 import QuickAdd from '../components/Transaction/QuickAdd'
 import { useNavigate } from 'react-router-dom'
 
@@ -131,6 +132,9 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Weekly insight */}
+      <WeeklyInsightCard walletType="PERSONAL" />
 
       {/* Category breakdown */}
       {personal && personal.byCategory.length > 0 && (

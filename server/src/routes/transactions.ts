@@ -11,6 +11,7 @@ import {
   deleteCategory,
   setInitialBalance,
   exportTransactions,
+  getWeeklySummary,
 } from '../controllers/transactionController'
 import { authenticate } from '../middleware/auth'
 import { idempotency } from '../middleware/idempotency'
@@ -23,6 +24,7 @@ router.post('/', idempotency, createTransaction)
 router.put('/:id', updateTransaction)
 router.delete('/:id', deleteTransaction)
 router.get('/summary/stats', getSummary)
+router.get('/summary/weekly', getWeeklySummary)
 router.get('/export/csv', exportTransactions)
 router.get('/categories/all', getCategories)
 router.post('/categories', createCategory)

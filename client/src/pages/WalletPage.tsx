@@ -6,6 +6,7 @@ import TransactionForm from '../components/Transaction/TransactionForm'
 import QuickAdd from '../components/Transaction/QuickAdd'
 import DailyBarChart from '../components/Charts/DailyBarChart'
 import CategoryPieChart from '../components/Charts/CategoryPieChart'
+import WeeklyInsightCard from '../components/Charts/WeeklyInsightCard'
 import PocketManager from '../components/Pocket/PocketManager'
 import { useSocket } from '../contexts/SocketContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -275,6 +276,9 @@ export default function WalletPage({ walletType }: Props) {
           </div>
         </div>
       )}
+
+      {/* Weekly insight */}
+      <WeeklyInsightCard walletType={walletType} />
 
       {/* Charts */}
       {summary && summary.byDay.length > 0 && (
