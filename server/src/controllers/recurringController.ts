@@ -139,6 +139,14 @@ export async function createRecurring(req: AuthRequest, res: Response) {
     if (!['MONTHLY', 'WEEKLY'].includes(frequency)) {
       return res.status(400).json({ error: 'Tần suất không hợp lệ' })
     }
+    if (frequency === 'MONTHLY' && dayOfMonth !== undefined) {
+      const d = parseInt(dayOfMonth)
+      if (isNaN(d) || d < 1 || d > 31) return res.status(400).json({ error: 'Ngày trong tháng phải từ 1–31' })
+    }
+    if (frequency === 'WEEKLY' && dayOfWeek !== undefined) {
+      const d = parseInt(dayOfWeek)
+      if (isNaN(d) || d < 0 || d > 6) return res.status(400).json({ error: 'Ngày trong tuần phải từ 0–6' })
+    }
     if (walletType === 'SHARED' && !req.familyId) {
       return res.status(400).json({ error: 'Chưa vào gia đình' })
     }
@@ -192,6 +200,9 @@ export async function createRecurring(req: AuthRequest, res: Response) {
       include: { category: true },
     })
 
+    // Tạo proposal ngay nếu đã trong cửa sổ nhắc (không chờ scheduler hàng giờ)
+    runRecurringScheduler().catch(console.error)
+
     res.json(recurring)
   } catch {
     res.status(500).json({ error: 'Lỗi server' })
@@ -237,6 +248,7 @@ export async function deleteRecurring(req: AuthRequest, res: Response) {
       const existing = await tx.recurringTransaction.findUnique({ where: { id } })
       if (!existing) throw Object.assign(new Error(), { status: 404, msg: 'Không tìm thấy' })
       if (existing.ownerId !== userId) throw Object.assign(new Error(), { status: 403, msg: 'Không có quyền' })
+      await tx.transactionProposal.deleteMany({ where: { recurringId: id, status: 'PENDING' } })
       await tx.recurringTransaction.delete({ where: { id } })
     })
 

@@ -38,7 +38,12 @@ export default function RecurringList({ items, userId, onUpdate, onDelete }: Pro
     <div className="space-y-2">
       {items.map(r => {
         const isOwner = r.ownerId === userId
-        const dueLabel = new Date(r.nextDue).toLocaleDateString('vi-VN')
+        const dueDate = new Date(r.nextDue)
+        const dueLabel = dueDate.toLocaleDateString('vi-VN')
+        const reminderDate = new Date(dueDate)
+        reminderDate.setDate(reminderDate.getDate() - r.remindDays)
+        const reminderLabel = reminderDate.toLocaleDateString('vi-VN')
+        const reminderSoon = reminderDate <= new Date()
         const scheduleLabel = r.frequency === 'MONTHLY'
           ? `Ngày ${r.dayOfMonth} hàng tháng`
           : r.dayOfWeek !== undefined ? `${DOW[r.dayOfWeek]} hàng tuần` : FREQ_LABEL[r.frequency]
@@ -61,7 +66,12 @@ export default function RecurringList({ items, userId, onUpdate, onDelete }: Pro
                 </p>
                 <p className="text-xs text-gray-400">
                   Lần tới: <span className="text-gray-600 font-medium">{dueLabel}</span>
-                  {' · '}Nhắc trước {r.remindDays} ngày
+                </p>
+                <p className={`text-xs ${reminderSoon ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>
+                  {reminderSoon
+                    ? '⏰ Đang chờ xác nhận — vào Kế hoạch → Chờ XN'
+                    : `Nhắc vào: ${reminderLabel} (trước ${r.remindDays} ngày)`
+                  }
                 </p>
                 <p className="text-xs text-gray-400">
                   Ví: {r.walletType === 'SHARED' ? 'Quỹ chung' : 'Cá nhân'}

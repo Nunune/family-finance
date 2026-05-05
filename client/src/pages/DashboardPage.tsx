@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import api from '../services/api'
-import { Summary } from '../types'
+import { Summary, Category, TransactionProposal } from '../types'
 import DailyBarChart from '../components/Charts/DailyBarChart'
 import CategoryPieChart from '../components/Charts/CategoryPieChart'
+import QuickAdd from '../components/Transaction/QuickAdd'
 import { useNavigate } from 'react-router-dom'
 
 function formatVND(n: number) {
@@ -15,11 +16,13 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const [personal, setPersonal] = useState<Summary | null>(null)
   const [shared, setShared] = useState<Summary | null>(null)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [proposals, setProposals] = useState<TransactionProposal[]>([])
   const now = new Date()
   const month = now.getMonth() + 1
   const year = now.getFullYear()
 
-  useEffect(() => {
+  const loadStats = useCallback(() => {
     api.get('/transactions/summary/stats', { params: { walletType: 'PERSONAL', month, year } })
       .then(r => setPersonal(r.data)).catch(() => {})
 
@@ -29,12 +32,40 @@ export default function DashboardPage() {
     }
   }, [user, month, year])
 
+  useEffect(() => { loadStats() }, [loadStats])
+
+  useEffect(() => {
+    api.get('/transactions/categories/all').then(r => setCategories(r.data)).catch(() => {})
+    api.get('/recurring/proposals').then(r => setProposals(r.data)).catch(() => {})
+  }, [])
+
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 pt-6 pb-24 space-y-6">
       <div>
         <h1 className="text-xl font-bold text-gray-800">Xin chào, {user?.name} 👋</h1>
         <p className="text-gray-500 text-sm">Tháng {month}/{year}</p>
       </div>
+
+      {proposals.length > 0 && (
+        <button
+          onClick={() => navigate('/plans')}
+          className="w-full flex items-center justify-between bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 hover:bg-amber-100 transition text-left"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-xl">⏰</span>
+            <div>
+              <p className="text-sm font-semibold text-amber-800">
+                {proposals.length} giao dịch định kỳ chờ xác nhận
+              </p>
+              <p className="text-xs text-amber-600">
+                {proposals.map(p => p.recurring?.title).filter(Boolean).slice(0, 2).join(', ')}
+                {proposals.length > 2 ? `...` : ''}
+              </p>
+            </div>
+          </div>
+          <span className="text-amber-600 text-sm font-medium shrink-0">Duyệt →</span>
+        </button>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Personal summary */}
@@ -108,6 +139,8 @@ export default function DashboardPage() {
           <CategoryPieChart data={personal.byCategory} />
         </div>
       )}
+
+      <QuickAdd walletType="PERSONAL" categories={categories} onSuccess={loadStats} />
     </div>
   )
 }
