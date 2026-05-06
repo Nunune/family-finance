@@ -44,7 +44,8 @@ model User {
   resetTokenExpiresAt DateTime?
   tokenVersion        Int       @default(0)
   family              Family?   @relation(fields: [familyId], references: [id])
-  personalWallet      Wallet?   @relation("PersonalWallet")
+  personalWallets     Wallet[]  @relation("PersonalWallet")
+  exchangeRates       ExchangeRate[]
   transactions        Transaction[]
   settlementsFrom     Settlement[]   @relation("SettlementFrom")
   settlementsTo       Settlement[]   @relation("SettlementTo")
@@ -69,16 +70,33 @@ model User {
 model Wallet {
   id             String        @id @default(cuid())
   type           String
-  userId         String?       @unique
+  userId         String?
   familyId       String?       @unique
   subFundId      String?       @unique
   initialBalance Float         @default(0)
+  currency       String        @default("VND")
+  name           String?
   user           User?         @relation("PersonalWallet", fields: [userId], references: [id])
   family         Family?       @relation("SharedWallet", fields: [familyId], references: [id])
   subFund        SubFund?      @relation("SubFundWallet", fields: [subFundId], references: [id])
   transactions   Transaction[]
   debts          Debt[]
   pockets        WalletPocket[]
+  createdAt      DateTime      @default(now())
+
+  @@index([userId])
+}
+
+model ExchangeRate {
+  id           String   @id @default(cuid())
+  userId       String
+  fromCurrency String
+  toCurrency   String
+  rate         Float
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, fromCurrency, toCurrency])
 }
 
 model SubFund {
@@ -119,9 +137,23 @@ model WalletPocket {
   order        Int           @default(0)
   wallet       Wallet        @relation(fields: [walletId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+  entries      PocketEntry[]
   createdAt    DateTime      @default(now())
 
   @@index([walletId])
+}
+
+model PocketEntry {
+  id        String       @id @default(cuid())
+  pocketId  String
+  amount    Float
+  type      String       @default("DEPOSIT") // DEPOSIT | WITHDRAWAL
+  note      String?
+  date      DateTime
+  pocket    WalletPocket @relation(fields: [pocketId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@index([pocketId, date])
 }
 
 model Category {

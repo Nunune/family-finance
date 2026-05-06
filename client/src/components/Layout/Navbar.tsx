@@ -143,6 +143,12 @@ export default function Navbar() {
                     className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition">
                     Quản lý danh mục
                   </button>
+                  {user?.role === 'ADMIN' && (
+                    <button onClick={() => { setShowUserMenu(false); navigate('/admin') }}
+                      className="w-full text-left px-4 py-2 text-sm text-amber-600 hover:bg-amber-50 transition">
+                      Báo cáo Admin
+                    </button>
+                  )}
                   <button onClick={() => { setShowUserMenu(false); logout() }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition">
                     Đăng xuất

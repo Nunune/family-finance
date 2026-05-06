@@ -414,9 +414,9 @@ export async function getFamilyReport(req: AuthRequest, res: Response) {
     })
     if (!family) return res.status(404).json({ error: 'Không tìm thấy gia đình' })
 
-    // Personal wallets for each member
+    // Personal wallets for each member (all currencies)
     const memberWallets = await prisma.wallet.findMany({
-      where: { userId: { in: family.members.map(m => m.id) } },
+      where: { userId: { in: family.members.map(m => m.id) }, type: 'PERSONAL' },
       select: { id: true, userId: true },
     })
     const walletUserMap: Record<string, string> = {}
@@ -447,10 +447,10 @@ export async function getFamilyReport(req: AuthRequest, res: Response) {
       include: { category: { select: { name: true, icon: true, color: true } } },
     })
 
-    // Per-member personal stats
+    // Per-member personal stats (all wallets, exclude inter-wallet transfers)
     const memberStats = family.members.map(member => {
-      const wallet = memberWallets.find(w => w.userId === member.id)
-      const memberTxs = wallet ? txs.filter(t => t.walletId === wallet.id) : []
+      const memberWalletIds = memberWallets.filter(w => w.userId === member.id).map(w => w.id)
+      const memberTxs = txs.filter(t => memberWalletIds.includes(t.walletId) && !(t as any).transferGroupId)
       return {
         userId: member.id,
         name: member.name,
@@ -459,16 +459,20 @@ export async function getFamilyReport(req: AuthRequest, res: Response) {
       }
     })
 
-    // Shared wallet stats
-    const sharedTxs = sharedWallet ? txs.filter(t => t.walletId === sharedWallet.id) : []
+    // Shared wallet stats (exclude inter-wallet transfers)
+    const sharedTxs = sharedWallet
+      ? txs.filter(t => t.walletId === sharedWallet.id && !(t as any).transferGroupId)
+      : []
     const shared = {
       income: sharedTxs.filter(t => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0),
       expense: sharedTxs.filter(t => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0),
     }
 
-    // Sub-fund stats
+    // Sub-fund stats (exclude inter-wallet transfers)
     const subFundStats = subFunds.map((sf: any) => {
-      const sfTxs = sf.wallet ? txs.filter((t: any) => t.walletId === sf.wallet.id) : []
+      const sfTxs = sf.wallet
+        ? txs.filter((t: any) => t.walletId === sf.wallet.id && !t.transferGroupId)
+        : []
       return {
         id: sf.id,
         name: sf.name,
@@ -487,8 +491,10 @@ export async function getFamilyReport(req: AuthRequest, res: Response) {
     })
     const categoryBreakdown = Object.values(catMap).sort((a, b) => b.amount - a.amount)
 
-    const totalIncome = memberStats.reduce((s, m) => s + m.personalIncome, 0) + shared.income
-    const totalExpense = memberStats.reduce((s, m) => s + m.personalExpense, 0) + shared.expense
+    const subFundIncome = subFundStats.reduce((s: number, sf: any) => s + sf.income, 0)
+    const subFundExpense = subFundStats.reduce((s: number, sf: any) => s + sf.expense, 0)
+    const totalIncome = memberStats.reduce((s, m) => s + m.personalIncome, 0) + shared.income + subFundIncome
+    const totalExpense = memberStats.reduce((s, m) => s + m.personalExpense, 0) + shared.expense + subFundExpense
 
     res.json({
       month: monthParam,

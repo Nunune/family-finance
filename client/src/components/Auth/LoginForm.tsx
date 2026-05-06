@@ -10,6 +10,7 @@ export default function LoginForm({ onSwitch, onForgot }: Props) {
   const { login } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const sessionExpired = sessionStorage.getItem('session_expired') === '1'
@@ -54,11 +55,20 @@ export default function LoginForm({ onSwitch, onForgot }: Props) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
-            <input
-              type="password" value={password} onChange={e => setPassword(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
-              placeholder="••••••••" required
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                placeholder="••••••••" required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
+              >
+                {showPassword ? '🙈' : '👁'}
+              </button>
+            </div>
             <div className="text-right mt-1">
               <button type="button" onClick={onForgot} className="text-xs text-emerald-600 hover:underline">
                 Quên mật khẩu?

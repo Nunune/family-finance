@@ -106,7 +106,7 @@ export async function createDebt(req: AuthRequest, res: Response) {
     let familyId: string | undefined
 
     if (scope === 'PERSONAL') {
-      const wallet = await prisma.wallet.findUnique({ where: { userId } })
+      const wallet = await prisma.wallet.findFirst({ where: { userId, type: 'PERSONAL' }, orderBy: { createdAt: 'asc' } })
       walletId = wallet?.id
     } else if (scope === 'SHARED') {
       if (!req.familyId) return res.status(400).json({ error: 'Chưa vào gia đình' })

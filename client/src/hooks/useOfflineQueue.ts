@@ -11,6 +11,7 @@ export interface QueuedTx {
     note: string
     categoryId: string
     walletType: WalletType
+    walletId?: string | null
   }
   queuedAt: string
   status: 'pending' | 'syncing' | 'failed'

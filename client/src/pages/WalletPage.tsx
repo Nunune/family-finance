@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { WalletType, Transaction, Summary, Category, WalletPocket } from '../types'
+import { WalletType, Transaction, Summary, Category, WalletPocket, WalletInfo, ExchangeRate } from '../types'
 import api from '../services/api'
 import TransactionList from '../components/Transaction/TransactionList'
 import TransactionForm from '../components/Transaction/TransactionForm'
@@ -8,17 +8,16 @@ import DailyBarChart from '../components/Charts/DailyBarChart'
 import CategoryPieChart from '../components/Charts/CategoryPieChart'
 import WeeklyInsightCard from '../components/Charts/WeeklyInsightCard'
 import PocketManager from '../components/Pocket/PocketManager'
+import PocketDetail from '../components/Pocket/PocketDetail'
 import TransferForm from '../components/Transfer/TransferForm'
+import ExchangeRateCard from '../components/Wallet/ExchangeRateCard'
 import { useSocket } from '../contexts/SocketContext'
 import { useAuth } from '../contexts/AuthContext'
 import { format } from 'date-fns'
+import { fmtCurrency, CURRENCIES, getCurrency } from '../utils/currency'
 
 interface Props {
   walletType: WalletType
-}
-
-function formatVND(n: number) {
-  return new Intl.NumberFormat('vi-VN').format(n) + ' ₫'
 }
 
 export default function WalletPage({ walletType }: Props) {
@@ -40,6 +39,7 @@ export default function WalletPage({ walletType }: Props) {
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [showPocketManager, setShowPocketManager] = useState(false)
+  const [activePocket, setActivePocket] = useState<WalletPocket | null>(null)
 
   const [showTransfer, setShowTransfer] = useState(false)
   const [showBalanceModal, setShowBalanceModal] = useState(false)
@@ -47,28 +47,55 @@ export default function WalletPage({ walletType }: Props) {
   const [savingBalance, setSavingBalance] = useState(false)
   const [exporting, setExporting] = useState(false)
 
+  // Multi-wallet (personal only)
+  const [wallets, setWallets] = useState<WalletInfo[]>([])
+  const [activeWalletId, setActiveWalletId] = useState<string | null>(null)
+  const [showAddWallet, setShowAddWallet] = useState(false)
+  const [newCurrency, setNewCurrency] = useState('AUD')
+  const [addingWallet, setAddingWallet] = useState(false)
+  const [addWalletError, setAddWalletError] = useState('')
+  const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([])
+  const [showWalletBalance, setShowWalletBalance] = useState(() => {
+    return localStorage.getItem('showWalletBalance') !== 'false'
+  })
+
+  const currency = summary?.currency ?? 'VND'
+  const fmt = (n: number) => fmtCurrency(n, currency)
+
   const startDate = `${year}-${String(month).padStart(2, '0')}-01`
   const endDate = format(new Date(year, month, 0), 'yyyy-MM-dd')
+
+  // Build query params: use walletId when a specific wallet is selected
+  const txParams = activeWalletId
+    ? { walletId: activeWalletId, startDate, endDate, page: 0, limit: 50 }
+    : { walletType, startDate, endDate, page: 0, limit: 50 }
+  const sumParams = activeWalletId
+    ? { walletId: activeWalletId, month, year }
+    : { walletType, month, year }
 
   const load = useCallback(async () => {
     setLoading(true)
     setPage(0)
     try {
       const [txRes, sumRes] = await Promise.all([
-        api.get('/transactions', { params: { walletType, startDate, endDate, page: 0, limit: 50 } }),
-        api.get('/transactions/summary/stats', { params: { walletType, month, year } }),
+        api.get('/transactions', { params: txParams }),
+        api.get('/transactions/summary/stats', { params: sumParams }),
       ])
       setTransactions(txRes.data.transactions)
       setHasMore(txRes.data.hasMore)
       setSummary(sumRes.data)
     } finally { setLoading(false) }
-  }, [walletType, startDate, endDate, month, year])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletType, activeWalletId, startDate, endDate, month, year])
 
   async function loadMore() {
     const nextPage = page + 1
     setLoadingMore(true)
     try {
-      const res = await api.get('/transactions', { params: { walletType, startDate, endDate, page: nextPage, limit: 50 } })
+      const params = activeWalletId
+        ? { walletId: activeWalletId, startDate, endDate, page: nextPage, limit: 50 }
+        : { walletType, startDate, endDate, page: nextPage, limit: 50 }
+      const res = await api.get('/transactions', { params })
       setTransactions(prev => [...prev, ...res.data.transactions])
       setHasMore(res.data.hasMore)
       setPage(nextPage)
@@ -77,7 +104,11 @@ export default function WalletPage({ walletType }: Props) {
 
   useEffect(() => {
     api.get('/transactions/categories/all').then(r => setCategories(r.data))
-    if (!isShared) api.get('/pockets').then(r => setPockets(r.data))
+    if (!isShared) {
+      api.get('/pockets').then(r => setPockets(r.data))
+      api.get('/wallets').then(r => setWallets(r.data))
+      api.get('/exchange-rates').then(r => setExchangeRates(r.data))
+    }
   }, [isShared])
 
   useEffect(() => { load() }, [load])
@@ -111,7 +142,7 @@ export default function WalletPage({ walletType }: Props) {
     setSavingBalance(true)
     try {
       await api.put('/transactions/wallet/balance', {
-        walletType,
+        ...(activeWalletId ? { walletId: activeWalletId } : { walletType }),
         initialBalance: balanceInput.replace(/\./g, '').replace(',', '.'),
       })
       setShowBalanceModal(false)
@@ -157,6 +188,23 @@ export default function WalletPage({ walletType }: Props) {
 
   const canEditBalance = !isShared || user?.role === 'ADMIN'
 
+  async function addWallet() {
+    setAddingWallet(true)
+    setAddWalletError('')
+    try {
+      const res = await api.post('/wallets', { currency: newCurrency })
+      // Reload wallets from server to stay in sync
+      const updated = await api.get('/wallets')
+      setWallets(updated.data)
+      setActiveWalletId(res.data.id)
+      setShowAddWallet(false)
+    } catch (e: any) {
+      setAddWalletError(e.response?.data?.error || 'Lỗi tạo ví')
+    } finally {
+      setAddingWallet(false)
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-4 pt-6 pb-24 space-y-6">
       <div className="flex items-center justify-between">
@@ -182,6 +230,87 @@ export default function WalletPage({ walletType }: Props) {
         </div>
       </div>
 
+      {/* Wallet tabs — personal only */}
+      {!isShared && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {wallets.map(w => {
+              const isActive = activeWalletId === w.id
+              return (
+                <button
+                  key={w.id}
+                  onClick={() => setActiveWalletId(isActive ? null : w.id)}
+                  className={`shrink-0 flex flex-col items-center px-3 py-1.5 rounded-xl text-sm font-medium transition ${
+                    isActive
+                      ? 'bg-indigo-500 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="text-base leading-none">{getCurrency(w.currency).symbol}</span>
+                    <span>{w.currency}</span>
+                  </div>
+                  {showWalletBalance && (
+                    <span className={`text-[10px] font-normal leading-tight ${isActive ? 'opacity-80 text-white' : 'text-gray-400'}`}>
+                      {fmtCurrency(w.balance, w.currency)}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+            {!showAddWallet && (
+              <button
+                onClick={() => { setShowAddWallet(true); setAddWalletError('') }}
+                className="shrink-0 px-3 py-1.5 rounded-xl text-sm text-gray-400 border-2 border-dashed border-gray-200 hover:border-indigo-300 hover:text-indigo-400 transition"
+              >
+                + Thêm ngoại tệ
+              </button>
+            )}
+            <button
+              onClick={() => {
+                const next = !showWalletBalance
+                setShowWalletBalance(next)
+                localStorage.setItem('showWalletBalance', String(next))
+              }}
+              className="shrink-0 px-2.5 py-1.5 rounded-xl text-sm text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition"
+              title={showWalletBalance ? 'Ẩn số dư' : 'Hiện số dư'}
+            >
+              {showWalletBalance ? '👁' : '🙈'}
+            </button>
+          </div>
+          {showAddWallet && (() => {
+            const available = CURRENCIES.filter(c => c.code !== 'VND' && !wallets.some(w => w.currency === c.code))
+            return (
+              <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+                <p className="text-xs font-semibold text-gray-500">Chọn loại tiền tệ</p>
+                <div className="flex flex-wrap gap-2">
+                  {available.map(c => (
+                    <button key={c.code} onClick={() => setNewCurrency(c.code)}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-sm font-medium transition border ${
+                        newCurrency === c.code
+                          ? 'bg-indigo-500 text-white border-indigo-500'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'
+                      }`}>
+                      <span>{c.symbol}</span>
+                      <span>{c.code}</span>
+                    </button>
+                  ))}
+                </div>
+                {addWalletError && <p className="text-xs text-red-500">{addWalletError}</p>}
+                <div className="flex gap-2">
+                  <button onClick={() => { setShowAddWallet(false); setAddWalletError('') }}
+                    className="flex-1 py-1.5 text-xs border border-gray-200 rounded-xl text-gray-500">Huỷ</button>
+                  <button onClick={addWallet} disabled={addingWallet || !newCurrency}
+                    className="flex-1 py-1.5 text-xs bg-indigo-500 text-white rounded-xl font-semibold disabled:opacity-50">
+                    {addingWallet ? 'Đang thêm...' : `Thêm ${newCurrency}`}
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      )}
+
       {/* Total wallet balance */}
       {summary && (() => {
         const hiddenBalance = !isShared
@@ -195,14 +324,14 @@ export default function WalletPage({ walletType }: Props) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm opacity-80">{hiddenBalance > 0 ? 'Tổng số dư' : 'Số dư hiện tại'}</p>
-                <p className="text-2xl font-bold mt-0.5">{formatVND(summary.walletBalance)}</p>
+                <p className="text-2xl font-bold mt-0.5">{fmt(summary.walletBalance)}</p>
                 {hiddenBalance > 0 && (
                   <div className="mt-1.5 space-y-0.5">
                     <p className="text-xs opacity-70">
-                      🔒 Đã ẩn: {formatVND(hiddenBalance)} ({pockets.filter(p => p.isHidden).map(p => p.name).join(', ')})
+                      🔒 Đã ẩn: {fmt(hiddenBalance)} ({pockets.filter(p => p.isHidden).map(p => p.name).join(', ')})
                     </p>
                     <p className="text-sm font-semibold opacity-90">
-                      Khả dụng: {formatVND(availableBalance)}
+                      Khả dụng: {fmt(availableBalance)}
                     </p>
                   </div>
                 )}
@@ -235,8 +364,8 @@ export default function WalletPage({ walletType }: Props) {
           {pockets.map(pocket => (
             <div
               key={pocket.id}
-              className="shrink-0 bg-white rounded-2xl border border-gray-100 p-3 w-36 cursor-pointer hover:border-gray-200 transition"
-              onClick={() => setShowPocketManager(true)}
+              className="shrink-0 bg-white rounded-2xl border border-gray-100 p-3 w-36 cursor-pointer hover:border-indigo-200 hover:shadow-sm transition"
+              onClick={() => setActivePocket(pocket)}
             >
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xl">{pocket.icon}</span>
@@ -247,6 +376,7 @@ export default function WalletPage({ walletType }: Props) {
                 style={{ color: pocket.balance < 0 ? '#EF4444' : undefined }}>
                 {pocket.balance.toLocaleString('vi-VN')}₫
               </p>
+              <p className="text-[10px] text-gray-300 mt-0.5">Nhấn để xem</p>
             </div>
           ))}
           <button
@@ -258,8 +388,26 @@ export default function WalletPage({ walletType }: Props) {
         </div>
       )}
 
+      {/* Exchange rates — shown when user has non-VND wallets */}
+      {!isShared && wallets.some(w => w.currency !== 'VND') && (
+        <ExchangeRateCard
+          currencies={wallets.filter(w => w.currency !== 'VND').map(w => w.currency)}
+          rates={exchangeRates}
+          onUpdated={rate => setExchangeRates(prev => {
+            const idx = prev.findIndex(r => r.id === rate.id)
+            return idx >= 0 ? prev.map(r => r.id === rate.id ? rate : r) : [...prev, rate]
+          })}
+        />
+      )}
+
       {categories.length > 0 && (
-        <QuickAdd walletType={walletType} categories={categories} onSuccess={load} />
+        <QuickAdd
+          walletType={walletType}
+          categories={categories}
+          onSuccess={load}
+          walletId={activeWalletId}
+          currency={currency}
+        />
       )}
 
       {/* Month nav */}
@@ -274,15 +422,15 @@ export default function WalletPage({ walletType }: Props) {
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-emerald-50 rounded-xl p-4 text-center">
             <p className="text-xs text-emerald-600 font-medium mb-1">Thu nhập</p>
-            <p className="text-lg font-bold text-emerald-700 truncate">{formatVND(summary.totalIncome)}</p>
+            <p className="text-lg font-bold text-emerald-700 truncate">{fmt(summary.totalIncome)}</p>
           </div>
           <div className="bg-red-50 rounded-xl p-4 text-center">
             <p className="text-xs text-red-500 font-medium mb-1">Chi tiêu</p>
-            <p className="text-lg font-bold text-red-600 truncate">{formatVND(summary.totalExpense)}</p>
+            <p className="text-lg font-bold text-red-600 truncate">{fmt(summary.totalExpense)}</p>
           </div>
           <div className={`rounded-xl p-4 text-center ${summary.balance >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
             <p className={`text-xs font-medium mb-1 ${summary.balance >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>Tháng này</p>
-            <p className={`text-lg font-bold truncate ${summary.balance >= 0 ? 'text-blue-700' : 'text-orange-600'}`}>{formatVND(summary.balance)}</p>
+            <p className={`text-lg font-bold truncate ${summary.balance >= 0 ? 'text-blue-700' : 'text-orange-600'}`}>{fmt(summary.balance)}</p>
           </div>
         </div>
       )}
@@ -346,6 +494,8 @@ export default function WalletPage({ walletType }: Props) {
         <TransactionForm
           walletType={walletType}
           pockets={pockets}
+          wallets={wallets}
+          activeWalletId={activeWalletId}
           editing={editing}
           onSuccess={() => { setShowForm(false); setEditing(null); load() }}
           onCancel={() => { setShowForm(false); setEditing(null) }}
@@ -366,6 +516,18 @@ export default function WalletPage({ walletType }: Props) {
           onUpdate={p => setPockets(prev => prev.map(x => x.id === p.id ? p : x))}
           onDelete={id => setPockets(prev => prev.filter(x => x.id !== id))}
           onClose={() => setShowPocketManager(false)}
+        />
+      )}
+
+      {activePocket && (
+        <PocketDetail
+          pocket={activePocket}
+          onClose={() => setActivePocket(null)}
+          onBalanceChanged={updated => {
+            setPockets(prev => prev.map(p => p.id === updated.id ? { ...p, balance: updated.balance } : p))
+            setActivePocket(prev => prev ? { ...prev, balance: updated.balance } : prev)
+            load()
+          }}
         />
       )}
 

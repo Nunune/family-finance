@@ -99,6 +99,13 @@ function parseAmount(text: string): { amount: number | null; confidence: Confide
     }
   }
 
+  // Currency prefix: $50, A$50, S$50, €100, £30, ¥500 → plain number, high confidence
+  const currencyMatch = t.match(/(?:A\$|S\$|[€£¥\$])\s*(\d[\d.,]*)/)
+  if (currencyMatch) {
+    const num = normalizeVNNumber(currencyMatch[1])
+    if (num !== null) return { amount: num, confidence: 'high', raw: currencyMatch[0] }
+  }
+
   // Số lớn không đơn vị — thử normalise trước, nếu >= 4 chữ số sau loại dấu ngàn
   const rawNum = t.match(/(\d[\d.,]*)/)
   if (rawNum) {

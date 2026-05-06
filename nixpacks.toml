@@ -7,5 +7,6 @@ cmds = [
 [phases.build]
 cmds = [
   "cd client && npm run build",
+  "cd server && npx prisma generate --schema=src/prisma/schema.prisma",
   "cd server && npm run build"
 ]

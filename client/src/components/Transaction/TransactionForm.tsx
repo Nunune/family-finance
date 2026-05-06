@@ -1,28 +1,38 @@
 import { useState, useEffect, FormEvent } from 'react'
 import api from '../../services/api'
-import { Category, WalletType, Transaction, WalletPocket } from '../../types'
+import { Category, WalletType, Transaction, WalletPocket, WalletInfo } from '../../types'
 import { format } from 'date-fns'
 import { parseAmount, fmtVND } from '../../utils/amountParser'
+import { fmtCurrency, getCurrency } from '../../utils/currency'
 
 interface Props {
   walletType: WalletType
   pockets?: WalletPocket[]
+  wallets?: WalletInfo[]       // all personal wallets (for selector)
+  activeWalletId?: string | null
   onSuccess: () => void
   onCancel: () => void
   editing?: Transaction | null
-  subFundId?: string  // nếu là giao dịch quỹ phụ
+  subFundId?: string
 }
 
-export default function TransactionForm({ walletType, pockets = [], onSuccess, onCancel, editing, subFundId }: Props) {
+export default function TransactionForm({ walletType, pockets = [], wallets = [], activeWalletId, onSuccess, onCancel, editing, subFundId }: Props) {
   const [type, setType] = useState<'INCOME' | 'EXPENSE'>(editing?.type || 'EXPENSE')
   const [amountRaw, setAmountRaw] = useState(editing ? editing.amount.toLocaleString('vi-VN') : '')
   const [date, setDate] = useState(editing ? format(new Date(editing.date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'))
   const [note, setNote] = useState(editing?.note || '')
   const [categoryId, setCategoryId] = useState(editing?.categoryId || '')
   const [pocketId, setPocketId] = useState<string>(editing?.pocketId || '')
+  const [selectedWalletId, setSelectedWalletId] = useState<string | null>(
+    editing?.walletId ?? activeWalletId ?? null
+  )
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  const selectedWallet = wallets.find(w => w.id === selectedWalletId) ?? wallets[0]
+  const currency = selectedWallet?.currency ?? 'VND'
+  const fmtAmount = (n: number) => fmtCurrency(n, currency)
 
   useEffect(() => {
     api.get('/transactions/categories/all').then(r => setCategories(r.data))
@@ -49,7 +59,11 @@ export default function TransactionForm({ walletType, pockets = [], onSuccess, o
         await api.put(`/transactions/${editing.id}`, { amount, type, date, note, categoryId, pocketId: pocket })
       } else {
         const wt = subFundId ? 'SUBFUND' : walletType
-        await api.post('/transactions', { amount, type, date, note, categoryId, walletType: wt, pocketId: pocket, subFundId: subFundId ?? null })
+        const body: Record<string, unknown> = { amount, type, date, note, categoryId, walletType: wt, pocketId: pocket, subFundId: subFundId ?? null }
+        if (selectedWalletId && walletType === 'PERSONAL' && !subFundId) {
+          body.walletId = selectedWalletId
+        }
+        await api.post('/transactions', body)
       }
       onSuccess()
     } catch (err: any) {
@@ -86,12 +100,11 @@ export default function TransactionForm({ walletType, pockets = [], onSuccess, o
               onChange={e => setAmountRaw(e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
               placeholder="vd: 45k, 1tr5, 500.000"
-              inputMode="decimal"
               required
             />
             {amountRaw.trim() && (
               <p className={`text-xs mt-1 px-1 ${amountIsValid ? 'text-emerald-600' : 'text-gray-400'}`}>
-                {amountIsValid ? `= ${fmtVND(parsedAmount!)}` : 'Không nhận dạng — thử: 45k, 1tr, 1.5tr, 500000'}
+                {amountIsValid ? `= ${fmtAmount(parsedAmount!)}` : 'Không nhận dạng — thử: 45k, 1tr, 1.5tr, 500000'}
               </p>
             )}
           </div>
@@ -108,6 +121,29 @@ export default function TransactionForm({ walletType, pockets = [], onSuccess, o
               ))}
             </div>
           </div>
+
+          {walletType === 'PERSONAL' && !subFundId && wallets.length > 1 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ví tiền tệ</label>
+              <div className="flex gap-2 flex-wrap">
+                {wallets.map(w => (
+                  <button
+                    key={w.id}
+                    type="button"
+                    onClick={() => setSelectedWalletId(w.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs border-2 transition font-medium ${
+                      selectedWalletId === w.id
+                        ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                    }`}
+                  >
+                    <span>{getCurrency(w.currency).symbol}</span>
+                    <span>{w.currency}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {walletType === 'PERSONAL' && pockets.length > 0 && (
             <div>

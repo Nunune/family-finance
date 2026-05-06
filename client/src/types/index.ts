@@ -66,12 +66,31 @@ export interface TransferWallet {
   subFundId?: string
 }
 
+export interface WalletInfo {
+  id: string
+  currency: string
+  name: string | null
+  initialBalance: number
+  balance: number
+  createdAt: string
+}
+
+export interface ExchangeRate {
+  id: string
+  userId: string
+  fromCurrency: string
+  toCurrency: string
+  rate: number
+  updatedAt: string
+}
+
 export interface Summary {
   totalIncome: number
   totalExpense: number
   balance: number
   walletBalance: number
   initialBalance: number
+  currency: string
   byDay: { date: string; income: number; expense: number }[]
   byCategory: { name: string; color: string; icon: string; total: number }[]
 }

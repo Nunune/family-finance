@@ -1,6 +1,29 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import api from '../services/api'
 import { Category } from '../types'
+
+const EMOJI_LIST = [
+  // Ăn uống
+  '🍜','🍱','🍔','🍕','🍣','🍛','🥗','🍺','☕','🧃','🍰','🥩',
+  // Di chuyển
+  '🚗','🛵','🚌','✈️','🚂','⛽','🅿️','🚕','🛺','🚲',
+  // Nhà cửa
+  '🏠','💡','🔧','🛒','🧹','🛁','📦','🪴','🛋️','🔑',
+  // Mua sắm
+  '👗','👟','👜','🛍️','💄','⌚','📱','💻','🎮','📷',
+  // Sức khoẻ
+  '💊','🏥','🧘','🏋️','💉','🦷','👓','🩺','🧬','🫀',
+  // Giáo dục
+  '📚','✏️','🎓','📐','🖊️','📖','🏫','🧑‍💻','🔬','🎨',
+  // Giải trí
+  '🎬','🎵','🎤','🎭','🎯','🎲','⚽','🏊','🎪','🎡',
+  // Tài chính
+  '💰','💳','🏦','📈','💵','🪙','💸','🧾','📊','🤑',
+  // Gia đình
+  '👶','🧒','👨‍👩‍👧','🎁','🎂','💝','🐶','🐱','🌿','🌸',
+  // Khác
+  '✨','⭐','🔖','📌','🗂️','📋','🧺','🪣','🔔','❤️',
+]
 
 const COLORS = [
   '#F97316', '#EF4444', '#EC4899', '#A855F7',
@@ -23,6 +46,8 @@ function CategoryForm({
   const [type, setType] = useState(initial?.type ?? 'EXPENSE')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showPicker, setShowPicker] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -42,15 +67,41 @@ function CategoryForm({
       {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
 
       <div className="flex gap-3">
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 relative" ref={pickerRef}>
           <label className="block text-xs font-medium text-gray-600 mb-1">Icon</label>
-          <input
-            value={icon}
-            onChange={e => setIcon(e.target.value)}
-            className="w-14 h-10 text-center text-2xl border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-300"
-            maxLength={2}
-            required
-          />
+          <button
+            type="button"
+            onClick={() => setShowPicker(v => !v)}
+            className="w-14 h-10 text-center text-2xl border border-gray-200 rounded-lg hover:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-white"
+          >
+            {icon}
+          </button>
+          {showPicker && (
+            <div className="absolute left-0 top-12 z-50 bg-white border border-gray-200 rounded-2xl shadow-xl p-2 w-64 max-h-56 overflow-y-auto">
+              <div className="grid grid-cols-8 gap-0.5">
+                {EMOJI_LIST.map(e => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => { setIcon(e); setShowPicker(false) }}
+                    className={`text-xl p-1 rounded-lg hover:bg-emerald-50 transition ${icon === e ? 'bg-emerald-100' : ''}`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+              <div className="border-t border-gray-100 mt-2 pt-2">
+                <input
+                  type="text"
+                  value={icon}
+                  onChange={e => setIcon(e.target.value)}
+                  placeholder="Hoặc dán emoji..."
+                  className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-300"
+                  maxLength={2}
+                />
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex-1">
           <label className="block text-xs font-medium text-gray-600 mb-1">Tên danh mục</label>

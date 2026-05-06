@@ -16,6 +16,8 @@ import planItemRoutes from './routes/planItems'
 import subFundRoutes from './routes/subFunds'
 import transferRoutes from './routes/transfers'
 import huiRoutes from './routes/hui'
+import walletRoutes from './routes/wallets'
+import exchangeRateRoutes from './routes/exchangeRates'
 import { setupSocket } from './socket/handlers'
 import { authLimiter, apiLimiter } from './middleware/rateLimit'
 import { runRecurringScheduler } from './controllers/recurringController'
@@ -24,13 +26,29 @@ const app = express()
 app.set('trust proxy', 1)
 const httpServer = createServer(app)
 const isProd = process.env.NODE_ENV === 'production'
-const corsOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173'
+
+// Allow multiple origins: CLIENT_ORIGIN can be comma-separated
+const rawOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173'
+const allowedOrigins = rawOrigin.split(',').map(s => s.trim())
+console.log('[CORS] allowed origins:', allowedOrigins)
+
+function corsOriginFn(origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) {
+  if (!origin || allowedOrigins.includes(origin)) return cb(null, true)
+  console.warn('[CORS] blocked origin:', origin)
+  cb(new Error('Not allowed by CORS'))
+}
 
 const io = new Server(httpServer, {
-  cors: { origin: corsOrigin, credentials: true },
+  cors: { origin: corsOriginFn, credentials: true },
 })
 
-app.use(cors({ origin: corsOrigin, credentials: true }))
+app.use(cors({ origin: corsOriginFn, credentials: true }))
+
+// Global request logger
+app.use((req, _res, next) => {
+  console.log(`[REQ] ${req.method} ${req.path} origin:${req.headers.origin || '-'}`)
+  next()
+})
 app.use(express.json({ limit: '100kb' }))
 
 app.use((req: any, _res, next) => {
@@ -50,6 +68,8 @@ app.use('/api/plan-items', apiLimiter, planItemRoutes)
 app.use('/api/sub-funds', apiLimiter, subFundRoutes)
 app.use('/api/transfers', apiLimiter, transferRoutes)
 app.use('/api/hui', apiLimiter, huiRoutes)
+app.use('/api/wallets', apiLimiter, walletRoutes)
+app.use('/api/exchange-rates', apiLimiter, exchangeRateRoutes)
 
 // Serve React client in production
 const clientDist = path.join(__dirname, '../../client/dist')

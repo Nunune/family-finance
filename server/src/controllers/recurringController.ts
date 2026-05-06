@@ -310,7 +310,7 @@ export async function confirmProposal(req: AuthRequest, res: Response) {
       const wallet = await prisma.wallet.findUnique({ where: { familyId: req.familyId } })
       walletId = wallet?.id
     } else {
-      const wallet = await prisma.wallet.findUnique({ where: { userId } })
+      const wallet = await prisma.wallet.findFirst({ where: { userId, type: 'PERSONAL' }, orderBy: { createdAt: 'asc' } })
       walletId = wallet?.id
     }
 

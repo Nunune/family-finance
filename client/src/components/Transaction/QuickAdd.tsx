@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { parseInput, ParseResult, learnPattern, parseDebt, DebtParseResult } from '../../utils/parser'
 import { useOfflineQueue } from '../../hooks/useOfflineQueue'
 import { Category, WalletType } from '../../types'
+import { fmtCurrency } from '../../utils/currency'
 import { format } from 'date-fns'
 import { vi } from 'date-fns/locale'
 import { v4 as uuidv4 } from 'uuid'
@@ -12,10 +13,12 @@ interface Props {
   categories: Category[]
   onSuccess: () => void
   subFundId?: string
+  walletId?: string | null
+  currency?: string
 }
 
-function formatVND(n: number) {
-  return new Intl.NumberFormat('vi-VN').format(n) + ' ₫'
+function formatAmt(n: number, currency = 'VND') {
+  return fmtCurrency(n, currency)
 }
 
 // ─── Confidence Badge ────────────────────────────────────────────────────
@@ -46,13 +49,24 @@ function FieldBadge({ label, value, confidence, onOverride }: {
 
 // ─── Amount Confirm Modal ────────────────────────────────────────────────
 
-function AmountConfirmModal({ raw, suggested, onConfirm, onCancel }: {
+function AmountConfirmModal({ raw, suggested, onConfirm, onCancel, currency = 'VND' }: {
   raw: string
   suggested: number
   onConfirm: (amount: number) => void
   onCancel: () => void
+  currency?: string
 }) {
   const [input, setInput] = useState(String(suggested))
+  const isVND = currency === 'VND'
+  const multipliers = isVND ? [1_000, 10_000, 100_000, 1_000_000] : [1, 10, 100, 1_000]
+
+  function mulLabel(mul: number) {
+    if (mul >= 1_000_000) return '×1M'
+    if (mul >= 1_000) return `×${mul / 1_000}k`
+    return `×${mul}`
+  }
+
+  const parsed = parseFloat(input)
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
@@ -63,12 +77,12 @@ function AmountConfirmModal({ raw, suggested, onConfirm, onCancel }: {
         </p>
 
         <div className="flex gap-2 mb-4">
-          {[1_000, 10_000, 100_000, 1_000_000].map(mul => (
+          {multipliers.map(mul => (
             <button key={mul} onClick={() => {
-              const base = parseInt(raw.replace(/\D/g, '')) || 0
+              const base = parseFloat(raw.replace(/[^\d.]/g, '')) || 0
               setInput(String(base * mul))
             }} className="flex-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg py-1.5 font-medium transition">
-              ×{mul >= 1_000_000 ? '1M' : mul >= 1_000 ? mul / 1_000 + 'k' : mul}
+              {mulLabel(mul)}
             </button>
           ))}
         </div>
@@ -78,14 +92,14 @@ function AmountConfirmModal({ raw, suggested, onConfirm, onCancel }: {
           className="w-full border-2 border-emerald-300 rounded-xl px-4 py-3 text-xl font-bold text-center focus:outline-none focus:border-emerald-500 mb-1"
         />
         <p className="text-center text-sm text-gray-400 mb-4">
-          {parseInt(input) ? formatVND(parseInt(input)) : '—'}
+          {parsed ? fmtCurrency(parsed, currency) : '—'}
         </p>
 
         <div className="flex gap-3">
           <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border text-gray-600 text-sm">Hủy</button>
           <button
-            onClick={() => onConfirm(parseInt(input))}
-            disabled={!parseInt(input)}
+            onClick={() => onConfirm(parsed)}
+            disabled={!parsed}
             className="flex-1 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-semibold disabled:opacity-40"
           >
             Xác nhận
@@ -124,7 +138,7 @@ function CategoryPicker({ categories, type, onSelect }: {
 
 // ─── Main QuickAdd ────────────────────────────────────────────────────────
 
-export default function QuickAdd({ walletType, categories, onSuccess, subFundId }: Props) {
+export default function QuickAdd({ walletType, categories, onSuccess, subFundId, walletId, currency = 'VND' }: Props) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [result, setResult] = useState<ParseResult | null>(null)
@@ -257,8 +271,9 @@ export default function QuickAdd({ walletType, categories, onSuccess, subFundId 
       date: format(finalDate, 'yyyy-MM-dd'),
       note: finalNote,
       categoryId: finalCategory.id,
-      walletType: subFundId ? 'SUBFUND' : walletType,
+      walletType: (subFundId ? 'SUBFUND' : walletType) as WalletType,
       subFundId: subFundId ?? null,
+      walletId: (walletId && walletType === 'PERSONAL' && !subFundId) ? walletId : null,
     }
 
     rememberWords(text, finalCategory.id, txType)
@@ -330,9 +345,22 @@ export default function QuickAdd({ walletType, categories, onSuccess, subFundId 
               value={text}
               onChange={e => handleInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-              className="w-full border-2 border-gray-200 focus:border-emerald-400 rounded-xl px-4 py-3 text-base outline-none transition mb-3"
+              className="w-full border-2 border-gray-200 focus:border-emerald-400 rounded-xl px-4 py-3 text-base outline-none transition mb-2"
               placeholder="ăn trưa 45k · lương 15tr · tiền điện 480k"
             />
+
+            {/* Quick amount chips — hiện khi chưa có số tiền hoặc text ngắn */}
+            {result?.amountConfidence !== 'high' && !overrideAmount && (
+              <div className="flex gap-1.5 flex-wrap mb-3">
+                {['20k', '50k', '100k', '200k', '500k', '1tr', '2tr', '5tr'].map(chip => (
+                  <button key={chip} type="button"
+                    onClick={() => handleInput(text ? text.replace(/\S+$/, chip) : chip)}
+                    className="px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-emerald-100 hover:text-emerald-700 transition">
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Type selector — luôn hiện khi có text, cho phép override khi sai chính tả */}
             {text.trim().length > 1 && (
@@ -372,7 +400,7 @@ export default function QuickAdd({ walletType, categories, onSuccess, subFundId 
                   {/* Số tiền */}
                   <FieldBadge
                     label="Số tiền"
-                    value={finalAmount ? formatVND(finalAmount) : 'chưa rõ'}
+                    value={finalAmount ? formatAmt(finalAmount, currency) : 'chưa rõ'}
                     confidence={amountConf === 'none' ? 'none' : amountConf}
                     onOverride={() => setShowAmountModal(true)}
                   />
@@ -398,7 +426,7 @@ export default function QuickAdd({ walletType, categories, onSuccess, subFundId 
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   <FieldBadge
                     label="Số tiền"
-                    value={finalAmount ? formatVND(finalAmount) : 'chưa rõ'}
+                    value={finalAmount ? formatAmt(finalAmount, currency) : 'chưa rõ'}
                     confidence={amountConf === 'none' ? 'none' : amountConf}
                     onOverride={() => setShowAmountModal(true)}
                   />
@@ -457,6 +485,7 @@ export default function QuickAdd({ walletType, categories, onSuccess, subFundId 
           suggested={(result?.amount ?? debtResult?.amount) ?? 0}
           onConfirm={amount => { setOverrideAmount(amount); setShowAmountModal(false) }}
           onCancel={() => setShowAmountModal(false)}
+          currency={currency}
         />
       )}
 

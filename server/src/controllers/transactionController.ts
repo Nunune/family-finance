@@ -23,7 +23,7 @@ export async function getTransactions(req: AuthRequest, res: Response) {
       const wallet = await prisma.wallet.findUnique({ where: { familyId: req.familyId } })
       walletId = wallet?.id
     } else {
-      const wallet = await prisma.wallet.findUnique({ where: { userId } })
+      const wallet = await prisma.wallet.findFirst({ where: { userId, type: 'PERSONAL' }, orderBy: { createdAt: 'asc' } })
       walletId = wallet?.id
     }
 
@@ -75,10 +75,10 @@ function pocketDelta(amount: number, type: string) {
 
 export async function createTransaction(req: AuthRequest, res: Response) {
   try {
-    const { amount, type, date, note, categoryId, walletType, pocketId, subFundId } = req.body
+    const { amount, type, date, note, categoryId, walletType, pocketId, subFundId, walletId: directWalletId } = req.body
     const userId = req.userId!
 
-    if (!amount || !type || !date || !categoryId || !walletType) {
+    if (!amount || !type || !date || !categoryId || (!walletType && !directWalletId)) {
       return res.status(400).json({ error: 'Thiếu thông tin giao dịch' })
     }
 
@@ -115,9 +115,15 @@ export async function createTransaction(req: AuthRequest, res: Response) {
       if (!wallet) return res.status(404).json({ error: 'Không tìm thấy quỹ chung' })
       walletId = wallet.id
     } else {
-      const wallet = await prisma.wallet.findUnique({ where: { userId } })
-      if (!wallet) return res.status(404).json({ error: 'Không tìm thấy ví cá nhân' })
-      walletId = wallet.id
+      if (directWalletId) {
+        const wallet = await prisma.wallet.findFirst({ where: { id: directWalletId, userId, type: 'PERSONAL' } })
+        if (!wallet) return res.status(404).json({ error: 'Không tìm thấy ví' })
+        walletId = wallet.id
+      } else {
+        const wallet = await prisma.wallet.findFirst({ where: { userId, type: 'PERSONAL' }, orderBy: { createdAt: 'asc' } })
+        if (!wallet) return res.status(404).json({ error: 'Không tìm thấy ví cá nhân' })
+        walletId = wallet.id
+      }
     }
 
     const actor = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } })
@@ -344,7 +350,7 @@ const VN_OFFSET = 7 * 60 * 60 * 1000 // UTC+7
 
 export async function getSummary(req: AuthRequest, res: Response) {
   try {
-    const { walletType, month, year } = req.query
+    const { walletType, walletId: walletIdParam, month, year } = req.query
     const userId = req.userId!
 
     const m = parseInt(month as string) || new Date().getUTCMonth() + 1
@@ -354,15 +360,17 @@ export async function getSummary(req: AuthRequest, res: Response) {
     const startDate = new Date(Date.UTC(y, m - 1, 1) - VN_OFFSET)
     const endDate = new Date(Date.UTC(y, m, 1) - VN_OFFSET - 1)
 
-    let wallet: { id: string; initialBalance: number } | null = null
-    if (walletType === 'SHARED') {
+    let wallet: { id: string; initialBalance: number; currency: string } | null = null
+    if (walletIdParam) {
+      wallet = await prisma.wallet.findFirst({ where: { id: walletIdParam as string }, select: { id: true, initialBalance: true, currency: true } })
+    } else if (walletType === 'SHARED') {
       if (!req.familyId) return res.status(400).json({ error: 'Chưa vào gia đình' })
-      wallet = await prisma.wallet.findUnique({ where: { familyId: req.familyId }, select: { id: true, initialBalance: true } })
+      wallet = await prisma.wallet.findUnique({ where: { familyId: req.familyId }, select: { id: true, initialBalance: true, currency: true } })
     } else {
-      wallet = await prisma.wallet.findUnique({ where: { userId }, select: { id: true, initialBalance: true } })
+      wallet = await prisma.wallet.findFirst({ where: { userId, type: 'PERSONAL' }, orderBy: { createdAt: 'asc' }, select: { id: true, initialBalance: true, currency: true } })
     }
 
-    if (!wallet) return res.json({ totalIncome: 0, totalExpense: 0, balance: 0, walletBalance: 0, initialBalance: 0, byDay: [], byCategory: [] })
+    if (!wallet) return res.json({ totalIncome: 0, totalExpense: 0, balance: 0, walletBalance: 0, initialBalance: 0, currency: 'VND', byDay: [], byCategory: [] })
 
     const [monthlyTx, allTimeTx] = await Promise.all([
       prisma.transaction.findMany({
@@ -405,6 +413,7 @@ export async function getSummary(req: AuthRequest, res: Response) {
       balance: totalIncome - totalExpense,
       walletBalance,
       initialBalance,
+      currency: wallet.currency,
       byDay: Object.entries(byDay).map(([date, v]) => ({ date, ...v })).sort((a, b) => a.date.localeCompare(b.date)),
       byCategory: Object.values(byCategory).sort((a, b) => b.total - a.total),
     })
@@ -416,7 +425,7 @@ export async function getSummary(req: AuthRequest, res: Response) {
 export async function setInitialBalance(req: AuthRequest, res: Response) {
   try {
     const userId = req.userId!
-    const { walletType, initialBalance } = req.body
+    const { walletType, walletId: walletIdParam, initialBalance } = req.body
 
     const parsed = parseFloat(initialBalance)
     if (isNaN(parsed) || parsed < 0) {
@@ -424,12 +433,14 @@ export async function setInitialBalance(req: AuthRequest, res: Response) {
     }
 
     let wallet: { id: string } | null = null
-    if (walletType === 'SHARED') {
+    if (walletIdParam) {
+      wallet = await prisma.wallet.findFirst({ where: { id: walletIdParam, userId }, select: { id: true } })
+    } else if (walletType === 'SHARED') {
       if (!req.familyId) return res.status(400).json({ error: 'Chưa vào gia đình' })
       if (req.userRole !== 'ADMIN') return res.status(403).json({ error: 'Chỉ Admin mới được đặt số dư quỹ chung' })
       wallet = await prisma.wallet.findUnique({ where: { familyId: req.familyId }, select: { id: true } })
     } else {
-      wallet = await prisma.wallet.findUnique({ where: { userId }, select: { id: true } })
+      wallet = await prisma.wallet.findFirst({ where: { userId, type: 'PERSONAL' }, orderBy: { createdAt: 'asc' }, select: { id: true } })
     }
 
     if (!wallet) return res.status(404).json({ error: 'Không tìm thấy ví' })
@@ -452,7 +463,7 @@ export async function exportTransactions(req: AuthRequest, res: Response) {
       const wallet = await prisma.wallet.findUnique({ where: { familyId: req.familyId } })
       walletId = wallet?.id
     } else {
-      const wallet = await prisma.wallet.findUnique({ where: { userId } })
+      const wallet = await prisma.wallet.findFirst({ where: { userId, type: 'PERSONAL' }, orderBy: { createdAt: 'asc' } })
       walletId = wallet?.id
     }
 
@@ -601,7 +612,7 @@ export async function getWeeklySummary(req: AuthRequest, res: Response) {
       const wallet = await prisma.wallet.findUnique({ where: { familyId: req.familyId } })
       walletId = wallet?.id
     } else {
-      const wallet = await prisma.wallet.findUnique({ where: { userId } })
+      const wallet = await prisma.wallet.findFirst({ where: { userId, type: 'PERSONAL' }, orderBy: { createdAt: 'asc' } })
       walletId = wallet?.id
     }
     if (!walletId) return res.json({ weeks: [], thisWeek: 0, avgExpense: 0, ratio: 1, alert: null, topCategories: [] })
