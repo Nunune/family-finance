@@ -52,6 +52,59 @@ export async function createWallet(req: AuthRequest, res: Response) {
   }
 }
 
+export async function getWalletMonthly(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.userId!
+    const monthCount = Math.min(parseInt(req.query.months as string) || 6, 12)
+
+    const wallets = await prisma.wallet.findMany({
+      where: { userId, type: 'PERSONAL' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, currency: true, name: true },
+    })
+
+    // Build month list oldest → newest
+    const now = new Date()
+    const monthList: string[] = []
+    for (let i = monthCount - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      monthList.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    }
+
+    const startDate = new Date(now.getFullYear(), now.getMonth() - (monthCount - 1), 1)
+    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+
+    const txs = await prisma.transaction.findMany({
+      where: {
+        walletId: { in: wallets.map(w => w.id) },
+        date: { gte: startDate, lt: endDate },
+        deletedAt: null,
+      } as any,
+      select: { walletId: true, type: true, amount: true, date: true, transferGroupId: true },
+    })
+
+    const result = wallets.map(w => {
+      const wTxs = txs.filter((t: any) => t.walletId === w.id && !t.transferGroupId)
+      const data = monthList.map(month => {
+        const [y, m] = month.split('-').map(Number)
+        const mTxs = wTxs.filter((t: any) => {
+          const d = new Date(t.date)
+          return d.getFullYear() === y && (d.getMonth() + 1) === m
+        })
+        const income = mTxs.filter((t: any) => t.type === 'INCOME').reduce((s: number, t: any) => s + t.amount, 0)
+        const expense = mTxs.filter((t: any) => t.type === 'EXPENSE').reduce((s: number, t: any) => s + t.amount, 0)
+        return { month, income, expense }
+      })
+      return { id: w.id, currency: w.currency, name: w.name, data }
+    })
+
+    res.json({ months: monthList, wallets: result })
+  } catch (e: any) {
+    console.error('[getWalletMonthly]', e?.message ?? e)
+    res.status(500).json({ error: 'Lỗi server' })
+  }
+}
+
 export async function deleteWallet(req: AuthRequest, res: Response) {
   try {
     const userId = req.userId!

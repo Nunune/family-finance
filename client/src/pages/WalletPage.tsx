@@ -11,6 +11,7 @@ import PocketManager from '../components/Pocket/PocketManager'
 import PocketDetail from '../components/Pocket/PocketDetail'
 import TransferForm from '../components/Transfer/TransferForm'
 import ExchangeRateCard from '../components/Wallet/ExchangeRateCard'
+import WalletMonthlyChart from '../components/Charts/WalletMonthlyChart'
 import AmountInput from '../components/shared/AmountInput'
 import { useSocket } from '../contexts/SocketContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -445,6 +446,11 @@ export default function WalletPage({ walletType }: Props) {
             return idx >= 0 ? prev.map(r => r.id === rate.id ? rate : r) : [...prev, rate]
           })}
         />
+      )}
+
+      {/* Wallet monthly comparison chart — only when 2+ wallets and no specific wallet selected */}
+      {!isShared && wallets.length > 1 && !activeWalletId && (
+        <WalletMonthlyChart exchangeRates={exchangeRates} />
       )}
 
       {categories.length > 0 && (
