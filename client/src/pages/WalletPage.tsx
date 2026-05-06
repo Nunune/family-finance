@@ -64,6 +64,19 @@ export default function WalletPage({ walletType }: Props) {
   const currency = summary?.currency ?? 'VND'
   const fmt = (n: number) => fmtCurrency(n, currency)
 
+  // Primary wallet = VND (first created). Foreign wallet = any other.
+  const primaryWalletId = wallets[0]?.id ?? null
+  const isViewingForeignWallet = !!(activeWalletId && activeWalletId !== primaryWalletId)
+
+  // Combined total in VND — only when showing "all wallets" and rates are available
+  const combinedVndTotal = !isShared && wallets.length > 1 && !activeWalletId
+    ? wallets.reduce((sum, w) => {
+        if (w.currency === 'VND') return sum + w.balance
+        const rate = exchangeRates.find(r => r.fromCurrency === w.currency && r.toCurrency === 'VND')
+        return rate ? sum + Math.round(w.balance * rate.rate) : sum
+      }, 0)
+    : null
+
   const startDate = `${year}-${String(month).padStart(2, '0')}-01`
   const endDate = format(new Date(year, month, 0), 'yyyy-MM-dd')
 
@@ -318,19 +331,48 @@ export default function WalletPage({ walletType }: Props) {
 
       {/* Total wallet balance */}
       {summary && (() => {
-        const hiddenBalance = !isShared
+        const hiddenBalance = !isShared && !isViewingForeignWallet
           ? pockets.filter(p => p.isHidden).reduce((s, p) => s + p.balance, 0)
           : 0
-        const availableBalance = summary.walletBalance - hiddenBalance
+        const displayBalance = combinedVndTotal ?? summary.walletBalance
+        const availableBalance = displayBalance - hiddenBalance
+        const isPositive = displayBalance >= 0
         return (
           <div className={`rounded-2xl p-5 ${
-            summary.walletBalance >= 0 ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-gradient-to-r from-orange-400 to-red-400'
+            isPositive ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-gradient-to-r from-orange-400 to-red-400'
           } text-white`}>
             <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm opacity-80">{hiddenBalance > 0 ? 'Tổng số dư' : 'Số dư hiện tại'}</p>
-                <p className="text-2xl font-bold mt-0.5">{fmt(summary.walletBalance)}</p>
-                {hiddenBalance > 0 && (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm opacity-80">
+                  {combinedVndTotal != null ? 'Tổng tài sản (quy đổi VND)' : hiddenBalance > 0 ? 'Tổng số dư' : 'Số dư hiện tại'}
+                </p>
+                <p className="text-2xl font-bold mt-0.5">{fmtCurrency(displayBalance, 'VND')}</p>
+
+                {/* Per-wallet breakdown when showing combined */}
+                {combinedVndTotal != null && (
+                  <div className="mt-2 space-y-1">
+                    {wallets.map(w => {
+                      const rate = w.currency !== 'VND'
+                        ? exchangeRates.find(r => r.fromCurrency === w.currency && r.toCurrency === 'VND')
+                        : null
+                      const vndEquiv = rate ? Math.round(w.balance * rate.rate) : null
+                      return (
+                        <div key={w.id} className="flex items-center gap-1.5 text-xs opacity-80">
+                          <span>{getCurrency(w.currency).symbol}</span>
+                          <span>{fmtCurrency(w.balance, w.currency)}</span>
+                          {vndEquiv != null && (
+                            <span className="opacity-60">≈ {fmtCurrency(vndEquiv, 'VND')}</span>
+                          )}
+                          {w.currency !== 'VND' && !rate && (
+                            <span className="opacity-50 italic">(chưa có tỉ giá)</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {hiddenBalance > 0 && !combinedVndTotal && (
                   <div className="mt-1.5 space-y-0.5">
                     <p className="text-xs opacity-70">
                       🔒 Đã ẩn: {fmt(hiddenBalance)} ({pockets.filter(p => p.isHidden).map(p => p.name).join(', ')})
@@ -340,18 +382,18 @@ export default function WalletPage({ walletType }: Props) {
                     </p>
                   </div>
                 )}
-                {summary.initialBalance === 0 && canEditBalance && (
+                {summary.initialBalance === 0 && canEditBalance && !combinedVndTotal && (
                   <p className="text-xs opacity-70 mt-1">Chưa thiết lập số dư ban đầu</p>
                 )}
               </div>
-              <div className="flex flex-col gap-2 items-end shrink-0">
+              <div className="flex flex-col gap-2 items-end shrink-0 ml-3">
                 {canEditBalance && (
                   <button onClick={openBalanceModal}
                     className="bg-white/20 hover:bg-white/30 transition rounded-xl px-3 py-2 text-xs font-medium">
                     ⚙ Thiết lập
                   </button>
                 )}
-                {!isShared && (
+                {!isShared && !isViewingForeignWallet && (
                   <button onClick={() => setShowPocketManager(true)}
                     className="bg-white/20 hover:bg-white/30 transition rounded-xl px-3 py-2 text-xs font-medium">
                     🗂 Ví tiền
@@ -363,8 +405,8 @@ export default function WalletPage({ walletType }: Props) {
         )
       })()}
 
-      {/* Pocket cards — personal only */}
-      {!isShared && pockets.length > 0 && (
+      {/* Pocket cards — personal only, not shown when viewing a foreign wallet */}
+      {!isShared && pockets.length > 0 && !isViewingForeignWallet && (
         <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
           {pockets.map(pocket => (
             <div
