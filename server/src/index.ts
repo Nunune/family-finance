@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import compression from 'compression'
 import path from 'path'
 import fs from 'fs'
 import { createServer } from 'http'
@@ -44,6 +45,7 @@ const io = new Server(httpServer, {
   cors: { origin: corsOriginFn, credentials: true },
 })
 
+app.use(compression())
 app.use(cors({ origin: corsOriginFn, credentials: true }))
 
 // Global request logger
@@ -78,8 +80,17 @@ app.use('/api/monthly-budgets', apiLimiter, monthlyBudgetRoutes)
 // Serve React client in production
 const clientDist = path.join(__dirname, '../../client/dist')
 if (isProd && fs.existsSync(clientDist)) {
-  app.use(express.static(clientDist))
-  app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')))
+  // Vite hashes asset filenames → safe to cache forever
+  app.use('/assets', express.static(path.join(clientDist, 'assets'), {
+    maxAge: '1y',
+    immutable: true,
+  }))
+  // index.html + other files must not be cached
+  app.use(express.static(clientDist, { maxAge: 0 }))
+  app.get('*', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+    res.sendFile(path.join(clientDist, 'index.html'))
+  })
 }
 
 setupSocket(io)

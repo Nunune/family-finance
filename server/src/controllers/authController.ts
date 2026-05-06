@@ -371,6 +371,36 @@ export async function updateProfile(req: AuthRequest, res: Response) {
   }
 }
 
+export async function changePassword(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.userId!
+    const { currentPassword, newPassword } = req.body
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Thiếu thông tin' })
+    if (newPassword.length < 6) return res.status(400).json({ error: 'Mật khẩu tối thiểu 6 ký tự' })
+
+    const user = await prisma.user.findUnique({ where: { id: userId } })
+    if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng' })
+
+    const valid = await bcrypt.compare(currentPassword, user.password)
+    if (!valid) return res.status(400).json({ error: 'Mật khẩu hiện tại không đúng' })
+
+    const isSame = await bcrypt.compare(newPassword, user.password)
+    if (isSame) return res.status(400).json({ error: 'Mật khẩu mới phải khác mật khẩu cũ' })
+
+    const hashed = await bcrypt.hash(newPassword, 10)
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashed, tokenVersion: { increment: 1 } },
+      select: { tokenVersion: true },
+    })
+
+    const token = generateToken(userId, user.role, user.familyId ?? undefined, updated.tokenVersion)
+    res.json({ token, message: 'Đổi mật khẩu thành công' })
+  } catch {
+    res.status(500).json({ error: 'Lỗi server' })
+  }
+}
+
 export async function logoutAll(req: AuthRequest, res: Response) {
   try {
     await prisma.user.update({

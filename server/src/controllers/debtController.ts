@@ -343,6 +343,106 @@ export async function deletePayment(req: AuthRequest, res: Response) {
   }
 }
 
+export async function bulkPayDebts(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.userId!
+    const { debtIds, totalAmount, date, note } = req.body
+
+    if (!Array.isArray(debtIds) || debtIds.length === 0) {
+      return res.status(400).json({ error: 'Chưa chọn khoản nợ' })
+    }
+    const parsedTotal = parseFloat(totalAmount)
+    if (isNaN(parsedTotal) || parsedTotal <= 0) {
+      return res.status(400).json({ error: 'Số tiền không hợp lệ' })
+    }
+    if (date) {
+      const d = new Date(date)
+      d.setHours(0, 0, 0, 0)
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      if (d > today) return res.status(400).json({ error: 'Ngày trả không được ở tương lai' })
+    }
+
+    const payDate = date ? new Date(date) : new Date()
+
+    const result = await prisma.$transaction(async (tx) => {
+      const debts = await tx.debt.findMany({
+        where: { id: { in: debtIds }, remainingAmount: { gt: 0 } },
+      })
+
+      const ordered = debtIds
+        .map(id => debts.find(d => d.id === id))
+        .filter(Boolean) as typeof debts
+
+      let leftover = parsedTotal
+      const updatedDebts = []
+
+      for (const debt of ordered) {
+        if (leftover <= 0) break
+
+        const canPay =
+          debt.ownerId === userId ||
+          (debt.scope === 'SHARED' && debt.familyId === req.familyId) ||
+          (debt.scope === 'INTERNAL' && (debt.lenderUserId === userId || debt.borrowerUserId === userId))
+        if (!canPay) continue
+
+        const payAmount = Math.min(debt.remainingAmount, leftover)
+        leftover -= payAmount
+
+        const payment = await (tx as any).debtPayment.create({
+          data: {
+            debtId: debt.id,
+            amount: payAmount,
+            date: payDate,
+            note: note?.trim() || null,
+            paidByUserId: userId,
+          },
+        })
+
+        const updated = await tx.debt.update({
+          where: { id: debt.id },
+          data: { remainingAmount: { decrement: payAmount } },
+          include: {
+            owner: { select: { id: true, name: true } },
+            viewers: { include: { user: { select: { id: true, name: true } } } },
+            payments: {
+              include: { paidBy: { select: { id: true, name: true } } },
+              orderBy: { date: 'desc' },
+            },
+          },
+        })
+
+        if (debt.walletId && debt.scope !== 'INTERNAL') {
+          const isBorrowed = debt.type === 'BORROWED'
+          const walletTx = await createDebtTx(tx, {
+            walletId: debt.walletId,
+            amount: payAmount,
+            txType: isBorrowed ? 'EXPENSE' : 'INCOME',
+            date: payDate,
+            note: isBorrowed ? `Trả nợ: ${debt.counterparty}` : `Thu hồi: ${debt.counterparty}`,
+            userId,
+            categoryName: isBorrowed ? 'Trả nợ' : 'Thu hồi nợ',
+            categoryIcon: isBorrowed ? '💳' : '💰',
+            categoryColor: isBorrowed ? '#EF4444' : '#10B981',
+          })
+          await (tx as any).debtPayment.update({
+            where: { id: payment.id },
+            data: { walletTransactionId: walletTx.id },
+          })
+        }
+
+        updatedDebts.push(updated)
+      }
+
+      return { updatedDebts, totalPaid: parsedTotal - leftover }
+    })
+
+    res.json(result)
+  } catch (err: any) {
+    if (err?.status) return res.status(err.status).json({ error: err.msg })
+    res.status(500).json({ error: 'Lỗi server' })
+  }
+}
+
 export async function addViewer(req: AuthRequest, res: Response) {
   try {
     const userId = req.userId!

@@ -1,0 +1,1 @@
+ALTER TABLE "WalletPocket" ADD COLUMN "initialBalance" FLOAT NOT NULL DEFAULT 0;

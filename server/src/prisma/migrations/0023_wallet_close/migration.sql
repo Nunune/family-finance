@@ -1,0 +1,1 @@
+ALTER TABLE "Wallet" ADD COLUMN "closedAt" TIMESTAMP(3);

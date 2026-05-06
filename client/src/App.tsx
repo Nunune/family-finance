@@ -1,42 +1,34 @@
-import React from 'react'
+import React, { Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { SocketProvider } from './contexts/SocketContext'
-import AuthPage from './pages/AuthPage'
-import DashboardPage from './pages/DashboardPage'
-import WalletPage from './pages/WalletPage'
-import SharedFundPage from './pages/SharedFundPage'
-import FamilyPage from './pages/FamilyPage'
-import ForgotPasswordPage from './pages/ForgotPasswordPage'
-import PlansPage from './pages/PlansPage'
-import CategoriesPage from './pages/CategoriesPage'
-import AdminPage from './pages/AdminPage'
-import BudgetPage from './pages/BudgetPage'
+import { ProposalProvider } from './contexts/ProposalContext'
 import Navbar from './components/Layout/Navbar'
 import BottomNav from './components/Layout/BottomNav'
-import { ProposalProvider } from './contexts/ProposalContext'
 
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
-  state = { hasError: false }
-  static getDerivedStateFromError() { return { hasError: true } }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4 p-4">
-          <div className="text-5xl">😵</div>
-          <h1 className="text-lg font-bold text-gray-800">Có lỗi xảy ra</h1>
-          <p className="text-sm text-gray-500 text-center">Vui lòng tải lại trang để tiếp tục</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-emerald-500 text-white px-6 py-2 rounded-xl text-sm font-medium"
-          >
-            Tải lại
-          </button>
-        </div>
-      )
-    }
-    return this.props.children
-  }
+const AuthPage           = lazy(() => import('./pages/AuthPage'))
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
+const DashboardPage      = lazy(() => import('./pages/DashboardPage'))
+const WalletPage         = lazy(() => import('./pages/WalletPage'))
+const SharedFundPage     = lazy(() => import('./pages/SharedFundPage'))
+const FamilyPage         = lazy(() => import('./pages/FamilyPage'))
+const PlansPage          = lazy(() => import('./pages/PlansPage'))
+const CategoriesPage     = lazy(() => import('./pages/CategoriesPage'))
+const BudgetPage         = lazy(() => import('./pages/BudgetPage'))
+const AdminPage          = lazy(() => import('./pages/AdminPage'))
+
+function PageLoader() {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="flex gap-1.5">
+        {[0, 1, 2].map(i => (
+          <div key={i} className="w-2 h-2 rounded-full bg-emerald-400"
+            style={{ animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }} />
+        ))}
+      </div>
+      <style>{`@keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-8px);opacity:1}}`}</style>
+    </div>
+  )
 }
 
 function AppContent() {
@@ -52,22 +44,13 @@ function AppContent() {
         </div>
         <div className="flex gap-1.5">
           {[0, 1, 2].map(i => (
-            <div
-              key={i}
-              className="w-2 h-2 rounded-full bg-emerald-400"
-              style={{ animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }}
-            />
+            <div key={i} className="w-2 h-2 rounded-full bg-emerald-400"
+              style={{ animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }} />
           ))}
         </div>
         <style>{`
-          @keyframes bounce {
-            0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
-            40% { transform: translateY(-8px); opacity: 1; }
-          }
-          @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
-          }
+          @keyframes bounce { 0%,80%,100%{transform:translateY(0);opacity:.4} 40%{transform:translateY(-8px);opacity:1} }
+          @keyframes float  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
         `}</style>
       </div>
     )
@@ -75,10 +58,12 @@ function AppContent() {
 
   if (!user) {
     return (
-      <Routes>
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="*" element={<AuthPage />} />
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="*" element={<AuthPage />} />
+        </Routes>
+      </Suspense>
     )
   }
 
@@ -86,33 +71,33 @@ function AppContent() {
     <div className="min-h-screen bg-gray-50 pb-16 sm:pb-0">
       <Navbar />
       <BottomNav />
-      <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/personal" element={<WalletPage walletType="PERSONAL" />} />
-        <Route path="/shared" element={<SharedFundPage />} />
-        <Route path="/family" element={<FamilyPage />} />
-        <Route path="/plans" element={<PlansPage />} />
-        <Route path="/categories" element={<CategoriesPage />} />
-        <Route path="/budget" element={<BudgetPage />} />
-        {user.isAppAdmin && <Route path="/admin" element={<AdminPage />} />}
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/personal" element={<WalletPage walletType="PERSONAL" />} />
+          <Route path="/shared" element={<SharedFundPage />} />
+          <Route path="/family" element={<FamilyPage />} />
+          <Route path="/plans" element={<PlansPage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
+          <Route path="/budget" element={<BudgetPage />} />
+          {user.isAppAdmin && <Route path="/admin" element={<AdminPage />} />}
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </Suspense>
     </div>
   )
 }
 
 export default function App() {
   return (
-    <ErrorBoundary>
-      <BrowserRouter>
-        <AuthProvider>
-          <SocketProvider>
-            <ProposalProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <SocketProvider>
+          <ProposalProvider>
             <AppContent />
           </ProposalProvider>
-          </SocketProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </ErrorBoundary>
+        </SocketProvider>
+      </AuthProvider>
+    </BrowserRouter>
   )
 }

@@ -147,6 +147,7 @@ export default function PlansPage() {
               userId={user!.id}
               onUpdate={updated => setDebts(prev => prev.map(d => d.id === updated.id ? updated : d))}
               onDelete={id => setDebts(prev => prev.filter(d => d.id !== id))}
+              onBulkUpdate={updated => setDebts(prev => prev.map(d => updated.find(u => u.id === d.id) ?? d))}
             />
           )}
 

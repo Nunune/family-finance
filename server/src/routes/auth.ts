@@ -4,7 +4,7 @@ import {
   verifyRecoveryCode, resetPassword,
   createFamily, createInvite, revokeInvite, getInvites, joinFamily, getFamilyInfo,
   leaveFamily, transferAdmin,
-  logoutAll, updateProfile, getFamilyReport,
+  logoutAll, updateProfile, getFamilyReport, changePassword,
 } from '../controllers/authController'
 import { authenticate } from '../middleware/auth'
 import { forgotPasswordLimiter } from '../middleware/rateLimit'
@@ -29,5 +29,6 @@ router.post('/family/leave', authenticate, leaveFamily)
 router.post('/family/transfer-admin', authenticate, transferAdmin)
 router.post('/logout-all', authenticate, logoutAll)
 router.patch('/profile', authenticate, updateProfile)
+router.post('/change-password', authenticate, changePassword)
 
 export default router

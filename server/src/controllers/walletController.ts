@@ -5,8 +5,9 @@ import prisma from '../lib/prisma'
 export async function listWallets(req: AuthRequest, res: Response) {
   try {
     const userId = req.userId!
-    const wallets = await prisma.wallet.findMany({
-      where: { userId, type: 'PERSONAL' },
+    type WalletRow = { id: string; currency: string; name: string | null; initialBalance: number; createdAt: Date }
+    const wallets: WalletRow[] = await (prisma.wallet as any).findMany({
+      where: { userId, type: 'PERSONAL', closedAt: null },
       orderBy: { createdAt: 'asc' },
       select: { id: true, currency: true, name: true, initialBalance: true, createdAt: true },
     })
@@ -57,8 +58,9 @@ export async function getWalletMonthly(req: AuthRequest, res: Response) {
     const userId = req.userId!
     const monthCount = Math.min(parseInt(req.query.months as string) || 6, 12)
 
-    const wallets = await prisma.wallet.findMany({
-      where: { userId, type: 'PERSONAL' },
+    type WalletMonthlyRow = { id: string; currency: string; name: string | null }
+    const wallets: WalletMonthlyRow[] = await (prisma.wallet as any).findMany({
+      where: { userId, type: 'PERSONAL', closedAt: null },
       orderBy: { createdAt: 'asc' },
       select: { id: true, currency: true, name: true },
     })
@@ -101,6 +103,37 @@ export async function getWalletMonthly(req: AuthRequest, res: Response) {
     res.json({ months: monthList, wallets: result })
   } catch (e: any) {
     console.error('[getWalletMonthly]', e?.message ?? e)
+    res.status(500).json({ error: 'Lỗi server' })
+  }
+}
+
+export async function closeWallet(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.userId!
+    const { id } = req.params
+
+    const wallet = await prisma.wallet.findFirst({ where: { id, userId, type: 'PERSONAL' } })
+    if (!wallet) return res.status(404).json({ error: 'Không tìm thấy ví' })
+
+    const primary = await prisma.wallet.findFirst({ where: { userId, type: 'PERSONAL' }, orderBy: { createdAt: 'asc' } })
+    if (primary?.id === id) return res.status(400).json({ error: 'Không thể đóng ví chính' })
+
+    const txSums = await prisma.transaction.groupBy({
+      by: ['type'],
+      where: { walletId: id, deletedAt: null },
+      _sum: { amount: true },
+    })
+    const income = txSums.find(t => t.type === 'INCOME')?._sum.amount ?? 0
+    const expense = txSums.find(t => t.type === 'EXPENSE')?._sum.amount ?? 0
+    const balance = wallet.initialBalance + income - expense
+
+    if (Math.abs(balance) > 0.005) {
+      return res.status(400).json({ error: `Số dư ví còn ${balance} — cần về 0 trước khi đóng` })
+    }
+
+    await (prisma.wallet as any).update({ where: { id }, data: { closedAt: new Date() } })
+    res.json({ success: true })
+  } catch {
     res.status(500).json({ error: 'Lỗi server' })
   }
 }

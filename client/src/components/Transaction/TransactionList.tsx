@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { Transaction, TransactionLog } from '../../types'
 import { format } from 'date-fns'
 import { vi } from 'date-fns/locale'
@@ -128,17 +128,20 @@ export default function TransactionList({ transactions, onEdit, onDelete, showUs
     )
   }
 
-  const grouped: Record<string, Transaction[]> = {}
-  transactions.forEach(t => {
-    const day = t.date.slice(0, 10)
-    if (!grouped[day]) grouped[day] = []
-    grouped[day].push(t)
-  })
-  Object.values(grouped).forEach(items =>
-    items.sort((a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || b.amount - a.amount
+  const grouped = useMemo(() => {
+    const g: Record<string, Transaction[]> = {}
+    transactions.forEach(t => {
+      const day = t.date.slice(0, 10)
+      if (!g[day]) g[day] = []
+      g[day].push(t)
+    })
+    Object.values(g).forEach(items =>
+      items.sort((a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || b.amount - a.amount
+      )
     )
-  )
+    return g
+  }, [transactions])
 
   return (
     <div className="space-y-4">

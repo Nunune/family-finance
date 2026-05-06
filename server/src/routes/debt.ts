@@ -3,6 +3,7 @@ import { authenticate } from '../middleware/auth'
 import {
   getDebts, createDebt, updateDebt, deleteDebt,
   addPayment, deletePayment, addViewer, removeViewer,
+  bulkPayDebts,
 } from '../controllers/debtController'
 
 const router = Router()
@@ -10,6 +11,7 @@ router.use(authenticate)
 
 router.get('/', getDebts)
 router.post('/', createDebt)
+router.post('/bulk-pay', bulkPayDebts)
 router.put('/:id', updateDebt)
 router.delete('/:id', deleteDebt)
 router.post('/:id/payments', addPayment)

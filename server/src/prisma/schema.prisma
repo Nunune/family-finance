@@ -86,6 +86,7 @@ model Wallet {
   debts          Debt[]
   pockets        WalletPocket[]
   huis           Hui[]
+  closedAt       DateTime?
   createdAt      DateTime      @default(now())
 
   @@index([userId])

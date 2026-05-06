@@ -63,6 +63,8 @@ export default function WalletPage({ walletType }: Props) {
   const [newCurrency, setNewCurrency] = useState('AUD')
   const [addingWallet, setAddingWallet] = useState(false)
   const [addWalletError, setAddWalletError] = useState('')
+  const [closingWallet, setClosingWallet] = useState(false)
+  const [closeWalletError, setCloseWalletError] = useState('')
   const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([])
   const [showWalletBalance, setShowWalletBalance] = useState(() => {
     return localStorage.getItem('showWalletBalance') !== 'false'
@@ -232,7 +234,6 @@ export default function WalletPage({ walletType }: Props) {
     setAddWalletError('')
     try {
       const res = await api.post('/wallets', { currency: newCurrency })
-      // Reload wallets from server to stay in sync
       const updated = await api.get('/wallets')
       setWallets(updated.data)
       setActiveWalletId(res.data.id)
@@ -241,6 +242,23 @@ export default function WalletPage({ walletType }: Props) {
       setAddWalletError(e.response?.data?.error || 'Lỗi tạo ví')
     } finally {
       setAddingWallet(false)
+    }
+  }
+
+  async function handleCloseWallet() {
+    if (!activeWalletId) return
+    if (!confirm('Đóng ví ngoại tệ này? Lịch sử giao dịch vẫn được giữ lại.')) return
+    setClosingWallet(true)
+    setCloseWalletError('')
+    try {
+      await api.post(`/wallets/${activeWalletId}/close`)
+      setActiveWalletId(null)
+      const updated = await api.get('/wallets')
+      setWallets(updated.data)
+    } catch (e: any) {
+      setCloseWalletError(e.response?.data?.error || 'Lỗi đóng ví')
+    } finally {
+      setClosingWallet(false)
     }
   }
 
@@ -346,6 +364,24 @@ export default function WalletPage({ walletType }: Props) {
                     {addingWallet ? 'Đang thêm...' : `Thêm ${newCurrency}`}
                   </button>
                 </div>
+              </div>
+            )
+          })()}
+
+          {/* Close foreign wallet — only when viewing a foreign wallet with zero balance */}
+          {isViewingForeignWallet && (() => {
+            const activeWallet = wallets.find(w => w.id === activeWalletId)
+            if (!activeWallet || Math.abs(activeWallet.balance) > 0.005) return null
+            return (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCloseWallet}
+                  disabled={closingWallet}
+                  className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-300 px-3 py-1.5 rounded-xl transition disabled:opacity-50"
+                >
+                  {closingWallet ? 'Đang đóng...' : `Đóng ví ${activeWallet.currency}`}
+                </button>
+                {closeWalletError && <p className="text-xs text-red-500">{closeWalletError}</p>}
               </div>
             )
           })()}

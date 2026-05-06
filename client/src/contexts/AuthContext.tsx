@@ -13,6 +13,7 @@ interface AuthContextType {
   refreshUser: () => Promise<void>
   dismissExpiryWarning: () => void
   updateProfile: (data: { name?: string; email?: string; currentPassword: string }) => Promise<void>
+  changePassword: (data: { currentPassword: string; newPassword: string }) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>(null!)
@@ -112,8 +113,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(r.data.user)
   }
 
+  async function changePassword(data: { currentPassword: string; newPassword: string }) {
+    const r = await api.post('/auth/change-password', data)
+    localStorage.setItem('token', r.data.token)
+    scheduleExpiryCheck(r.data.token)
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, tokenExpiring, login, register, logout, logoutAll, refreshUser, dismissExpiryWarning, updateProfile }}>
+    <AuthContext.Provider value={{ user, loading, tokenExpiring, login, register, logout, logoutAll, refreshUser, dismissExpiryWarning, updateProfile, changePassword }}>
       {children}
     </AuthContext.Provider>
   )
