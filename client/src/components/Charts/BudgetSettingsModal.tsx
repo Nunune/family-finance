@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../../services/api'
 import { parseAmount } from '../../utils/amountParser'
+import AmountInput from '../shared/AmountInput'
 import type { WeeklyBudget, Category } from '../../types'
 
 interface Props {
@@ -126,19 +127,11 @@ export default function BudgetSettingsModal({ onClose, onSaved }: Props) {
                   <div className="space-y-3 pt-1">
                     <div>
                       <label className="text-xs text-gray-500 mb-1 block">Giới hạn chi tiêu / tuần</label>
-                      <input
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                        placeholder="vd: 500k, 2tr, 1.500.000"
+                      <AmountInput
                         value={form.limitAmount}
-                        onChange={e => { setForm(f => ({ ...f, limitAmount: e.target.value })); setAmountError('') }}
-                        autoFocus
+                        onChange={v => { setForm(f => ({ ...f, limitAmount: v })); setAmountError('') }}
                       />
                       {amountError && <p className="text-xs text-red-500 mt-1">{amountError}</p>}
-                      {form.limitAmount && parseAmount(form.limitAmount) && (
-                        <p className="text-xs text-emerald-600 mt-1">
-                          = {fmtFull(parseAmount(form.limitAmount)!)}
-                        </p>
-                      )}
                     </div>
                     <div>
                       <label className="text-xs text-gray-500 mb-1 block">

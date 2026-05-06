@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { SavingsGoal, SavingsContribution, SavingsWithdrawalRequest } from '../../types'
 import api from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
+import { parseAmount } from '../../utils/amountParser'
+import AmountInput from '../shared/AmountInput'
 
 const fmt = (n: number) => new Intl.NumberFormat('vi-VN').format(Math.round(n)) + ' ₫'
 const fmtShort = (n: number) => {
@@ -133,7 +135,7 @@ function ContributionEntryForm({ goalId, onDone }: { goalId: string; onDone: (c:
   const [error, setError] = useState('')
 
   async function submit() {
-    const amt = Number(amount.replace(/\./g, '').replace(',', '.'))
+    const amt = parseAmount(amount) ?? 0
     if (!amt || amt <= 0) { setError('Nhập số tiền'); return }
     setError(''); setLoading(true)
     try {
@@ -157,11 +159,12 @@ function ContributionEntryForm({ goalId, onDone }: { goalId: string; onDone: (c:
           − Rút quỹ
         </button>
       </div>
-      <div className="flex gap-2">
-        <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Số tiền"
-          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+      <div className="flex gap-2 items-start">
+        <div className="flex-1">
+          <AmountInput value={amount} onChange={setAmount} />
+        </div>
         <input type="date" value={date} onChange={e => setDate(e.target.value)}
-          className="border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+          className="border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 shrink-0" />
       </div>
       <input value={note} onChange={e => setNote(e.target.value)} placeholder="Ghi chú (tuỳ chọn)"
         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />

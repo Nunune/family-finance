@@ -1,16 +1,8 @@
 import { useEffect, useState } from 'react'
 import api from '../../services/api'
 import type { TransferWallet } from '../../types'
-function parseAmt(s: string): number | null {
-  const t = s.trim().toLowerCase().replace(/\s/g, '')
-  const m = t.match(/^([\d,.]+)(tr|triệu|m|k|nghìn|nghin)?$/)
-  if (!m) return null
-  const base = parseFloat(m[1].replace(/,/g, '.'))
-  if (isNaN(base)) return null
-  const mul = m[2] === 'tr' || m[2] === 'triệu' || m[2] === 'm' ? 1_000_000
-    : m[2] === 'k' || m[2] === 'nghìn' || m[2] === 'nghin' ? 1_000 : 1
-  return Math.round(base * mul)
-}
+import { parseAmount } from '../../utils/amountParser'
+import AmountInput from '../shared/AmountInput'
 
 interface Props {
   onSuccess: () => void
@@ -38,7 +30,7 @@ export default function TransferForm({ onSuccess, onClose }: Props) {
   }, [])
 
   async function submit() {
-    const amount = parseAmt(amountRaw)
+    const amount = parseAmount(amountRaw)
     if (!amount || amount <= 0) return setError('Nhập số tiền hợp lệ')
     if (!fromKey || !toKey) return setError('Chọn ví nguồn và ví đích')
     if (fromKey === toKey) return setError('Ví nguồn và ví đích không được trùng')
@@ -105,14 +97,7 @@ export default function TransferForm({ onSuccess, onClose }: Props) {
         {/* Amount */}
         <div>
           <label className="text-xs text-gray-500 mb-1 block">Số tiền</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            placeholder="5tr, 500k, 1500000..."
-            value={amountRaw}
-            onChange={e => setAmountRaw(e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-          />
+          <AmountInput value={amountRaw} onChange={setAmountRaw} />
         </div>
 
         {/* Date + Note */}

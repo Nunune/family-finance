@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Category, RecurringTransaction } from '../../types'
 import api from '../../services/api'
+import { parseAmount } from '../../utils/amountParser'
+import AmountInput from '../shared/AmountInput'
 
 interface Props {
   onSave: (r: RecurringTransaction) => void
@@ -35,9 +37,11 @@ export default function RecurringForm({ onSave, onClose, hasFamilyWallet }: Prop
     setError('')
     setSaving(true)
     try {
+      const parsed = parseAmount(amount)
+      if (!parsed || parsed <= 0) { setError('Nhập số tiền hợp lệ (vd: 500k, 1tr5)'); setSaving(false); return }
       const { data } = await api.post('/recurring', {
         title,
-        amount: amount.replace(/\./g, '').replace(',', '.'),
+        amount: String(parsed),
         type,
         categoryId,
         walletType,
@@ -79,11 +83,7 @@ export default function RecurringForm({ onSave, onClose, hasFamilyWallet }: Prop
             value={title} onChange={e => setTitle(e.target.value)} required
           />
 
-          <input
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-            placeholder="Số tiền"
-            value={amount} onChange={e => setAmount(e.target.value)} required
-          />
+          <AmountInput value={amount} onChange={setAmount} />
 
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Danh mục</label>

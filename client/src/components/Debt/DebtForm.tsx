@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Debt, FamilyMember } from '../../types'
 import api from '../../services/api'
-import { parseAmount, fmtVND } from '../../utils/amountParser'
+import { parseAmount } from '../../utils/amountParser'
+import AmountInput from '../shared/AmountInput'
 
 interface Props {
   onSave: (debt: Debt) => void
@@ -86,18 +87,7 @@ export default function DebtForm({ onSave, onClose, familyMembers = [], userId }
             value={title} onChange={e => setTitle(e.target.value)} required
           />
 
-          <div>
-            <input
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-              placeholder="Số tiền (vd: 5tr, 1tr5, 5.000.000)"
-              value={amountRaw} onChange={e => setAmountRaw(e.target.value)} required
-            />
-            {amountRaw.trim() && (
-              <p className={`text-xs mt-1 px-1 ${amountValid ? 'text-emerald-600' : 'text-gray-400'}`}>
-                {amountValid ? `= ${fmtVND(parsedAmount!)}` : 'Không nhận dạng — thử: 5tr, 500k, 1.500.000'}
-              </p>
-            )}
-          </div>
+          <AmountInput value={amountRaw} onChange={setAmountRaw} />
 
           <input
             className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"

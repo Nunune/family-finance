@@ -2,6 +2,8 @@ import { useState, FormEvent } from 'react'
 import { SavingsGoal } from '../../types'
 import api from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
+import { parseAmount } from '../../utils/amountParser'
+import AmountInput from '../shared/AmountInput'
 
 const ICONS = ['🎯', '✈️', '🏖️', '🏠', '🚗', '💍', '📱', '💻', '🎓', '👶', '🏋️', '🎮', '💰', '🌏', '🎁']
 
@@ -23,7 +25,7 @@ export default function SavingsGoalForm({ editing, onSave, onClose }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const parsedAmount = Number(targetAmount.replace(/\./g, '').replace(',', '.')) || 0
+  const parsedAmount = parseAmount(targetAmount) ?? 0
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -78,10 +80,11 @@ export default function SavingsGoalForm({ editing, onSave, onClose }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Số tiền mục tiêu</label>
-              <input
-                value={targetAmount} onChange={e => setTargetAmount(e.target.value)}
-                placeholder="VD: 50.000.000"
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              <AmountInput
+                value={targetAmount}
+                onChange={setTargetAmount}
+                placeholder="50tr, 5tr, 500k..."
+                chipSet={['500k', '1tr', '5tr', '10tr', '20tr', '50tr', '100tr']}
               />
             </div>
             <div>

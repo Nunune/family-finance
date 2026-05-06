@@ -11,10 +11,12 @@ import PocketManager from '../components/Pocket/PocketManager'
 import PocketDetail from '../components/Pocket/PocketDetail'
 import TransferForm from '../components/Transfer/TransferForm'
 import ExchangeRateCard from '../components/Wallet/ExchangeRateCard'
+import AmountInput from '../components/shared/AmountInput'
 import { useSocket } from '../contexts/SocketContext'
 import { useAuth } from '../contexts/AuthContext'
 import { format } from 'date-fns'
 import { fmtCurrency, CURRENCIES, getCurrency } from '../utils/currency'
+import { parseAmount } from '../utils/amountParser'
 
 interface Props {
   walletType: WalletType
@@ -139,11 +141,14 @@ export default function WalletPage({ walletType }: Props) {
   }
 
   async function saveInitialBalance() {
+    const parsed = activeWalletId
+      ? parseFloat(balanceInput) || 0  // foreign currency: plain decimal
+      : (parseAmount(balanceInput) ?? 0)
     setSavingBalance(true)
     try {
       await api.put('/transactions/wallet/balance', {
         ...(activeWalletId ? { walletId: activeWalletId } : { walletType }),
-        initialBalance: balanceInput.replace(/\./g, '').replace(',', '.'),
+        initialBalance: String(parsed),
       })
       setShowBalanceModal(false)
       load()
@@ -539,12 +544,11 @@ export default function WalletPage({ walletType }: Props) {
             <p className="text-sm text-gray-500">
               Nhập số tiền đã có trước khi dùng app. Giúp tính chính xác số dư hiện tại.
             </p>
-            <input
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-              placeholder="Ví dụ: 5.000.000"
+            <AmountInput
               value={balanceInput}
-              onChange={e => setBalanceInput(e.target.value)}
-              autoFocus
+              onChange={setBalanceInput}
+              currency={currency}
+              placeholder={currency === 'VND' ? 'vd: 5tr, 500k, 5.000.000' : `vd: 100, 2500.50`}
             />
             <div className="flex gap-2">
               <button onClick={() => setShowBalanceModal(false)}

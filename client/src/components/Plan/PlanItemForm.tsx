@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import api from '../../services/api'
 import { parseAmount } from '../../utils/amountParser'
+import AmountInput from '../shared/AmountInput'
 import type { PlanItem, Category, PlanFrequency } from '../../types'
 
 interface Props {
@@ -113,15 +114,7 @@ export default function PlanItemForm({ item, onSaved, onClose }: Props) {
           {/* Amount */}
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Số tiền dự kiến *</label>
-            <input
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400"
-              placeholder="vd: 15tr, 500k, 1.500.000"
-              value={amountStr}
-              onChange={e => setAmountStr(e.target.value)}
-            />
-            {parsedAmount && parsedAmount > 0 && (
-              <p className="text-xs text-emerald-600 mt-1">= {fmtFull(parsedAmount)}</p>
-            )}
+            <AmountInput value={amountStr} onChange={setAmountStr} />
           </div>
 
           {/* Frequency */}

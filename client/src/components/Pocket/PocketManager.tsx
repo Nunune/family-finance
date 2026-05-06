@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { WalletPocket } from '../../types'
 import api from '../../services/api'
+import { parseAmount } from '../../utils/amountParser'
+import AmountInput from '../shared/AmountInput'
 
 const COLORS = [
   '#F97316', '#EF4444', '#EC4899', '#A855F7',
@@ -120,14 +122,13 @@ function PocketForm({
 
       <div>
         <label className="block text-xs text-gray-500 mb-1">
-          Số dư hiện tại (₫)
+          Số dư hiện tại
           <span className="text-gray-400 font-normal ml-1">— số tiền đang có trong ví này</span>
         </label>
-        <input
-          type="number"
+        <AmountInput
           value={balance}
-          onChange={e => setBalance(e.target.value)}
-          min="0"
+          onChange={setBalance}
+          placeholder="vd: 500k, 1tr, 2.000.000"
           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
         />
       </div>
@@ -175,7 +176,7 @@ export default function PocketManager({ pockets, onUpdate, onCreate, onDelete, o
     try {
       const res = await api.post('/pockets', {
         ...data,
-        balance: parseFloat(data.balance) || 0,
+        balance: parseAmount(data.balance) ?? 0,
       })
       onCreate(res.data)
       setShowAdd(false)
@@ -190,7 +191,7 @@ export default function PocketManager({ pockets, onUpdate, onCreate, onDelete, o
     try {
       const res = await api.put(`/pockets/${editing.id}`, {
         ...data,
-        balance: parseFloat(data.balance) || 0,
+        balance: parseAmount(data.balance) ?? 0,
       })
       onUpdate(res.data)
       setEditing(null)
