@@ -128,18 +128,17 @@ const BENCHMARK_DETAIL: Record<BenchmarkType, string> = {
 function generalAlertMessage(alert: WeeklySummary['alert'], ratio: number, benchmarkType: BenchmarkType): string {
   if (!alert) return ''
   const pct = Math.round(Math.abs(ratio - 1) * 100)
-  const ref = benchmarkType === 'HISTORY' ? 'trung bình' : benchmarkType === 'MONTHLY_BUDGET' ? 'ngân sách tháng' : 'chi tiêu tháng'
   const HIGH = [
-    `🔥 Chi tiêu tuần này vượt mốc ${ref} rồi${pct > 0 ? ` (${pct}%)` : ''}! Ví đang bốc khói đây!`,
-    `💸 Đã vượt qua mốc ${ref}${pct > 0 ? ` ${pct}%` : ''}! Kiểm tra lại thôi!`,
+    `🔥 Chi tiêu tuần này cao hơn ${pct}% so với mốc — ví đang bốc khói rồi!`,
+    `💸 Tiền bay đi đâu hết ${pct}% so với mốc vậy? Kiểm tra lại thôi!`,
   ]
   const MODERATE = [
-    `📈 Chi tiêu đang đạt ${Math.round(ratio * 100)}% mốc ${ref} — sắp chạm ngưỡng rồi!`,
-    `🟡 Sắp chạm mốc ${ref} rồi — cẩn thận thêm chút nha!`,
+    `📈 Chi tiêu tuần này cao hơn ${pct}% so với mốc — hơi nhiều đó!`,
+    `🟡 Tốc độ tiêu tiền đang tăng ${pct}% so với mốc — chú ý chút nha!`,
   ]
   const GOOD = [
-    `🏆 Tuần này tiết kiệm hơn ${pct}% so với mốc! Vô địch tiết kiệm rồi!`,
-    `💚 Ví đang mỉm cười! Tiết kiệm được ${pct}% so với ${ref}!`,
+    `🏆 Tuần này tiết kiệm hơn ${pct}%! Vô địch tiết kiệm rồi!`,
+    `💚 Ví đang mỉm cười với bạn! Tiết kiệm được ${pct}% so với mốc!`,
   ]
   if (alert === 'HIGH') return HIGH[Math.floor(Math.random() * HIGH.length)]
   if (alert === 'MODERATE') return MODERATE[Math.floor(Math.random() * MODERATE.length)]
@@ -220,7 +219,7 @@ export default function WeeklyInsightCard({ walletType = 'PERSONAL' }: { walletT
         <div className="flex items-center gap-2">
           {data.alert && (
             <span className={`text-xs font-medium px-2 py-1 rounded-full ${cfg.badge}`}>
-              {cfg.icon} {data.alert === 'HIGH' ? 'Vượt mốc rồi!' : data.alert === 'MODERATE' ? 'Sắp chạm mốc' : data.alert === 'GOOD' ? 'Sắp giàu rồi' : 'Quá ổn áp'}
+              {cfg.icon} {data.alert === 'HIGH' ? 'Khét ví rồi!' : data.alert === 'MODERATE' ? 'Ví sắp cháy' : data.alert === 'GOOD' ? 'Sắp giàu rồi' : 'Quá ổn áp'}
             </span>
           )}
           {walletType === 'PERSONAL' && (
