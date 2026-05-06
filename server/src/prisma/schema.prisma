@@ -38,6 +38,7 @@ model User {
   email               String    @unique
   password            String
   role                String    @default("MEMBER")
+  isAppAdmin          Boolean   @default(false)
   familyId            String?
   recoveryCodeHash    String?
   resetToken          String?
@@ -64,6 +65,8 @@ model User {
   huis                 Hui[]
   withdrawalRequests   SavingsWithdrawalRequest[]  @relation("WithdrawalRequester")
   withdrawalApprovals  SavingsWithdrawalApproval[]
+  recipientLabels      RecipientLabel[]
+  monthlyBudgets       MonthlyBudget[]
   createdAt           DateTime  @default(now())
 }
 
@@ -82,6 +85,7 @@ model Wallet {
   transactions   Transaction[]
   debts          Debt[]
   pockets        WalletPocket[]
+  huis           Hui[]
   createdAt      DateTime      @default(now())
 
   @@index([userId])
@@ -133,6 +137,7 @@ model WalletPocket {
   icon         String        @default("💰")
   color        String        @default("#6B7280")
   balance      Float         @default(0)
+  initialBalance Float       @default(0)
   isHidden     Boolean       @default(false)
   order        Int           @default(0)
   wallet       Wallet        @relation(fields: [walletId], references: [id], onDelete: Cascade)
@@ -163,12 +168,14 @@ model Category {
   color        String
   type         String
   isDefault    Boolean                @default(false)
+  keywords     String                 @default("")
   userId       String?
   user         User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
-  recurrings   RecurringTransaction[]
-  weeklyBudgets WeeklyBudget[]
-  planItems     PlanItem[]
+  transactions       Transaction[]
+  recurrings         RecurringTransaction[]
+  weeklyBudgets      WeeklyBudget[]
+  planItems          PlanItem[]
+  monthlyBudgetItems MonthlyBudgetItem[]
 
   @@unique([name, userId])
 }
@@ -204,16 +211,18 @@ model Transaction {
   walletId        String
   categoryId      String
   userId          String
-  pocketId        String?
-  deletedAt       DateTime?
-  transferGroupId String?
-  wallet      Wallet           @relation(fields: [walletId], references: [id])
-  category    Category         @relation(fields: [categoryId], references: [id])
-  user        User             @relation(fields: [userId], references: [id])
-  pocket      WalletPocket?    @relation(fields: [pocketId], references: [id], onDelete: SetNull)
-  logs        TransactionLog[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  pocketId             String?
+  deletedAt            DateTime?
+  transferGroupId      String?
+  recipientLabelId     String?
+  wallet               Wallet           @relation(fields: [walletId], references: [id])
+  category             Category         @relation(fields: [categoryId], references: [id])
+  user                 User             @relation(fields: [userId], references: [id])
+  pocket               WalletPocket?    @relation(fields: [pocketId], references: [id], onDelete: SetNull)
+  recipientLabel       RecipientLabel?  @relation(fields: [recipientLabelId], references: [id], onDelete: SetNull)
+  logs                 TransactionLog[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
   @@index([walletId, date, deletedAt])
   @@index([walletId, deletedAt])
@@ -430,13 +439,15 @@ model Hui {
   name         String
   amount       Float
   totalRounds  Int
-  myRound      Int
+  myRounds     String    @default("[]")
   startDate    DateTime
   frequency    String     @default("MONTHLY") // "MONTHLY" | "WEEKLY"
   status       String     @default("ACTIVE")  // "ACTIVE" | "COMPLETED"
   organizerFee Float?     // tiền công thảo hụi, áp dụng khi hốt kỳ 1
+  walletId     String?    // ví đồng bộ tiền đóng/hốt
   userId       String
   user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet       Wallet?    @relation(fields: [walletId], references: [id], onDelete: SetNull)
   rounds       HuiRound[]
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -445,17 +456,18 @@ model Hui {
 }
 
 model HuiRound {
-  id         String    @id @default(cuid())
-  huiId      String
-  roundNo    Int
-  ownerName  String?
-  dueDate    DateTime
-  bidAmount  Float?
-  isPaid     Boolean   @default(false)
-  isReceived Boolean   @default(false)
-  paidAt     DateTime?
-  hui        Hui       @relation(fields: [huiId], references: [id], onDelete: Cascade)
-  createdAt  DateTime  @default(now())
+  id                  String    @id @default(cuid())
+  huiId               String
+  roundNo             Int
+  ownerName           String?
+  dueDate             DateTime
+  bidAmount           Float?
+  isPaid              Boolean   @default(false)
+  isReceived          Boolean   @default(false)
+  paidAt              DateTime?
+  walletTransactionId String?   // transaction tạo khi đóng/hốt (để xóa khi undo)
+  hui                 Hui       @relation(fields: [huiId], references: [id], onDelete: Cascade)
+  createdAt           DateTime  @default(now())
 
   @@unique([huiId, roundNo])
 }
@@ -477,4 +489,52 @@ model TransactionProposal {
 
   @@unique([recurringId, scheduledDate])
   @@index([recurringId, status])
+}
+
+// ─── Nhãn người nhận ──────────────────────────────────────────────────────────
+
+model RecipientLabel {
+  id                 String              @id @default(cuid())
+  name               String
+  icon               String              @default("👤")
+  color              String              @default("#6B7280")
+  userId             String
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions       Transaction[]
+  monthlyBudgetItems MonthlyBudgetItem[]
+  createdAt          DateTime            @default(now())
+
+  @@unique([name, userId])
+  @@index([userId])
+}
+
+// ─── Ngân sách tháng ──────────────────────────────────────────────────────────
+
+model MonthlyBudget {
+  id        String              @id @default(cuid())
+  userId    String
+  month     String              // "2026-05" (YYYY-MM)
+  amount    Float               // tổng ngân sách tháng
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     MonthlyBudgetItem[]
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@unique([userId, month])
+  @@index([userId])
+}
+
+model MonthlyBudgetItem {
+  id               String          @id @default(cuid())
+  budgetId         String
+  categoryId       String?
+  recipientLabelId String?
+  amount           Float
+  budget           MonthlyBudget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  category         Category?       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  recipientLabel   RecipientLabel? @relation(fields: [recipientLabelId], references: [id], onDelete: Cascade)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([budgetId])
 }

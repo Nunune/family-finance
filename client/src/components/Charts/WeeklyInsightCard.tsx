@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../../services/api'
 import BudgetSettingsModal from './BudgetSettingsModal'
-import type { WeeklySummary, WeeklyCategorySummary } from '../../types'
+import type { WeeklySummary, WeeklyCategorySummary, BenchmarkType } from '../../types'
 
 const fmt = (n: number) => {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1) + 'tr'
@@ -113,20 +113,33 @@ function getFunBudgetMsg(catName: string, status: 'EXCEEDED' | 'WARNING'): strin
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
-function generalAlertMessage(alert: WeeklySummary['alert'], ratio: number): string {
+const BENCHMARK_LABEL: Record<BenchmarkType, string> = {
+  HISTORY: 'TB 3 tuần trước',
+  MONTHLY_BUDGET: 'Ngân sách ÷ 4',
+  MONTHLY_ACTUAL: 'Chi tháng ÷ 4',
+}
+
+const BENCHMARK_DETAIL: Record<BenchmarkType, string> = {
+  HISTORY: 'Mốc = trung bình 3 tuần gần nhất',
+  MONTHLY_BUDGET: 'Mốc = ngân sách tháng chia 4',
+  MONTHLY_ACTUAL: 'Mốc = tổng chi tháng này chia 4',
+}
+
+function generalAlertMessage(alert: WeeklySummary['alert'], ratio: number, benchmarkType: BenchmarkType): string {
   if (!alert) return ''
   const pct = Math.round(Math.abs(ratio - 1) * 100)
+  const ref = benchmarkType === 'HISTORY' ? 'trung bình' : benchmarkType === 'MONTHLY_BUDGET' ? 'ngân sách tháng' : 'chi tiêu tháng'
   const HIGH = [
-    `🔥 Chi tiêu tuần này cao hơn ${pct}% so với trung bình — ví đang bốc khói rồi!`,
-    `💸 Tiền bay đi đâu hết ${pct}% so với tuần trước vậy? Kiểm tra lại thôi!`,
+    `🔥 Chi tiêu tuần này vượt mốc ${ref} rồi${pct > 0 ? ` (${pct}%)` : ''}! Ví đang bốc khói đây!`,
+    `💸 Đã vượt qua mốc ${ref}${pct > 0 ? ` ${pct}%` : ''}! Kiểm tra lại thôi!`,
   ]
   const MODERATE = [
-    `📈 Chi tiêu tuần này cao hơn ${pct}% so với trung bình — hơi nhiều đó!`,
-    `🟡 Tốc độ tiêu tiền đang tăng ${pct}% — chú ý chút nha!`,
+    `📈 Chi tiêu đang đạt ${Math.round(ratio * 100)}% mốc ${ref} — sắp chạm ngưỡng rồi!`,
+    `🟡 Sắp chạm mốc ${ref} rồi — cẩn thận thêm chút nha!`,
   ]
   const GOOD = [
-    `🏆 Tuần này tiết kiệm hơn ${pct}%! Vô địch tiết kiệm rồi!`,
-    `💚 Ví đang mỉm cười với bạn! Tiết kiệm được ${pct}% so với trung bình!`,
+    `🏆 Tuần này tiết kiệm hơn ${pct}% so với mốc! Vô địch tiết kiệm rồi!`,
+    `💚 Ví đang mỉm cười! Tiết kiệm được ${pct}% so với ${ref}!`,
   ]
   if (alert === 'HIGH') return HIGH[Math.floor(Math.random() * HIGH.length)]
   if (alert === 'MODERATE') return MODERATE[Math.floor(Math.random() * MODERATE.length)]
@@ -207,7 +220,7 @@ export default function WeeklyInsightCard({ walletType = 'PERSONAL' }: { walletT
         <div className="flex items-center gap-2">
           {data.alert && (
             <span className={`text-xs font-medium px-2 py-1 rounded-full ${cfg.badge}`}>
-              {cfg.icon} {data.alert === 'HIGH' ? 'Khét ví rồi!' : data.alert === 'MODERATE' ? 'Ví sắp cháy' : data.alert === 'GOOD' ? 'Sắp giàu rồi' : 'Quá ổn áp'}
+              {cfg.icon} {data.alert === 'HIGH' ? 'Vượt mốc rồi!' : data.alert === 'MODERATE' ? 'Sắp chạm mốc' : data.alert === 'GOOD' ? 'Sắp giàu rồi' : 'Quá ổn áp'}
             </span>
           )}
           {walletType === 'PERSONAL' && (
@@ -253,7 +266,7 @@ export default function WeeklyInsightCard({ walletType = 'PERSONAL' }: { walletT
       {/* Overall alert message */}
       {data.alert && data.alert !== 'NORMAL' && data.thisWeek > 0 && (
         <p className={`text-xs ${cfg.text} leading-relaxed`}>
-          {getAlertMsg('overall', () => generalAlertMessage(data.alert, data.ratio))}
+          {getAlertMsg('overall', () => generalAlertMessage(data.alert, data.ratio, data.benchmarkType))}
         </p>
       )}
 
@@ -283,27 +296,70 @@ export default function WeeklyInsightCard({ walletType = 'PERSONAL' }: { walletT
         </div>
       )}
 
-      {/* Stats row */}
-      {data.thisWeek > 0 && (
+      {/* Benchmark progress block */}
+      {data.benchmarkAmount > 0 && data.thisWeek > 0 && (
+        <div className="rounded-xl bg-white/60 border border-white/80 px-3 py-2.5 space-y-2">
+          {/* Top row: this week vs benchmark */}
+          <div className="flex items-end justify-between text-xs">
+            <div>
+              <p className="text-gray-400 text-[10px]">Tuần này</p>
+              <p className={`font-bold text-sm ${cfg.text}`}>{fmtFull(data.thisWeek)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-gray-400 text-[10px]">Mốc</p>
+              <p className="font-bold text-gray-600 text-sm">{fmtFull(data.benchmarkAmount)}</p>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="space-y-1">
+            <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  data.ratio >= 1.0 ? 'bg-red-400' : data.ratio >= 0.9 ? 'bg-amber-400' : 'bg-emerald-400'
+                }`}
+                style={{ width: `${Math.min(data.ratio * 100, 100)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[10px]">
+              <span className={
+                data.ratio >= 1.0 ? 'text-red-500 font-semibold' :
+                data.ratio >= 0.9 ? 'text-amber-600 font-semibold' : 'text-gray-400'
+              }>
+                {Math.round(data.ratio * 100)}% mốc
+                {data.ratio >= 1.0 && ' — Vượt mức!'}
+                {data.ratio >= 0.9 && data.ratio < 1.0 && ' — Gần chạm!'}
+              </span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium ${
+                data.benchmarkType === 'HISTORY' ? 'bg-indigo-50 text-indigo-500' :
+                data.benchmarkType === 'MONTHLY_BUDGET' ? 'bg-emerald-50 text-emerald-600' :
+                'bg-gray-100 text-gray-500'
+              }`}>
+                {BENCHMARK_DETAIL[data.benchmarkType]}
+              </span>
+            </div>
+          </div>
+
+          {/* Projected */}
+          {data.projectedWeek > 0 && data.daysElapsed < 7 && (
+            <p className={`text-[10px] ${data.projectedWeek > data.benchmarkAmount ? 'text-amber-600' : 'text-gray-400'}`}>
+              Dự kiến cả tuần: ~{fmtFull(data.projectedWeek)}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Stats row khi chưa có benchmark */}
+      {!(data.benchmarkAmount > 0) && data.thisWeek > 0 && data.avgExpense > 0 && (
         <div className="flex gap-4 text-xs">
           <div>
             <p className="text-gray-400">Tuần này</p>
             <p className={`font-bold ${cfg.text}`}>{fmtFull(data.thisWeek)}</p>
           </div>
-          {data.avgExpense > 0 && (
-            <div>
-              <p className="text-gray-400">Trung bình/tuần</p>
-              <p className="font-bold text-gray-600">{fmtFull(data.avgExpense)}</p>
-            </div>
-          )}
-          {data.projectedWeek > 0 && data.daysElapsed < 7 && (
-            <div>
-              <p className="text-gray-400">Dự kiến cả tuần</p>
-              <p className={`font-bold ${data.projectedWeek > data.avgExpense * 1.2 ? 'text-amber-600' : 'text-gray-600'}`}>
-                ~{fmtFull(data.projectedWeek)}
-              </p>
-            </div>
-          )}
+          <div>
+            <p className="text-gray-400">Trung bình/tuần</p>
+            <p className="font-bold text-gray-600">{fmtFull(data.avgExpense)}</p>
+          </div>
         </div>
       )}
 

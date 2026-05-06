@@ -18,6 +18,8 @@ import transferRoutes from './routes/transfers'
 import huiRoutes from './routes/hui'
 import walletRoutes from './routes/wallets'
 import exchangeRateRoutes from './routes/exchangeRates'
+import recipientRoutes from './routes/recipients'
+import monthlyBudgetRoutes from './routes/monthlyBudgets'
 import { setupSocket } from './socket/handlers'
 import { authLimiter, apiLimiter } from './middleware/rateLimit'
 import { runRecurringScheduler } from './controllers/recurringController'
@@ -70,6 +72,8 @@ app.use('/api/transfers', apiLimiter, transferRoutes)
 app.use('/api/hui', apiLimiter, huiRoutes)
 app.use('/api/wallets', apiLimiter, walletRoutes)
 app.use('/api/exchange-rates', apiLimiter, exchangeRateRoutes)
+app.use('/api/recipients', apiLimiter, recipientRoutes)
+app.use('/api/monthly-budgets', apiLimiter, monthlyBudgetRoutes)
 
 // Serve React client in production
 const clientDist = path.join(__dirname, '../../client/dist')

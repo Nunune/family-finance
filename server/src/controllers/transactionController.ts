@@ -9,7 +9,7 @@ function getIO(req: AuthRequest): Server | null {
 
 export async function getTransactions(req: AuthRequest, res: Response) {
   try {
-    const { walletType, walletId: directWalletId, startDate, endDate, categoryId, page, limit } = req.query
+    const { walletType, walletId: directWalletId, startDate, endDate, categoryId, recipientLabelId, page, limit } = req.query
     const userId = req.userId!
     const pageNum = Math.max(0, parseInt(page as string) || 0)
     const pageSize = Math.min(200, Math.max(1, parseInt(limit as string) || 50))
@@ -40,10 +40,12 @@ export async function getTransactions(req: AuthRequest, res: Response) {
       }
     }
     if (categoryId) where.categoryId = categoryId as string
+    if (recipientLabelId) where.recipientLabelId = recipientLabelId as string
 
     const includeObj: Record<string, unknown> = {
       category: true,
       user: { select: { id: true, name: true } },
+      recipientLabel: true,
     }
     if (walletType === 'SHARED') {
       includeObj.logs = { orderBy: { createdAt: 'desc' }, take: 3 }
@@ -75,7 +77,7 @@ function pocketDelta(amount: number, type: string) {
 
 export async function createTransaction(req: AuthRequest, res: Response) {
   try {
-    const { amount, type, date, note, categoryId, walletType, pocketId, subFundId, walletId: directWalletId } = req.body
+    const { amount, type, date, note, categoryId, walletType, pocketId, subFundId, walletId: directWalletId, recipientLabelId } = req.body
     const userId = req.userId!
 
     if (!amount || !type || !date || !categoryId || (!walletType && !directWalletId)) {
@@ -145,6 +147,7 @@ export async function createTransaction(req: AuthRequest, res: Response) {
         categoryId,
         userId,
         pocketId: resolvedPocketId,
+        recipientLabelId: recipientLabelId ?? null,
         logs: {
           create: {
             action: 'created',
@@ -157,6 +160,7 @@ export async function createTransaction(req: AuthRequest, res: Response) {
       include: {
         category: true,
         user: { select: { id: true, name: true } },
+        recipientLabel: true,
         logs: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
     })
@@ -182,7 +186,7 @@ export async function createTransaction(req: AuthRequest, res: Response) {
 export async function updateTransaction(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params
-    const { amount, type, date, note, categoryId, pocketId } = req.body
+    const { amount, type, date, note, categoryId, pocketId, recipientLabelId } = req.body
     const userId = req.userId!
 
     const parsedAmount = parseFloat(amount)
@@ -230,6 +234,7 @@ export async function updateTransaction(req: AuthRequest, res: Response) {
         data: {
           amount: parsedAmount, type, date: parsedDate, note: note?.trim() || null, categoryId,
           pocketId: newPocketId,
+          ...(recipientLabelId !== undefined && { recipientLabelId: recipientLabelId ?? null }),
           logs: {
             create: {
               action: 'updated',
@@ -248,6 +253,7 @@ export async function updateTransaction(req: AuthRequest, res: Response) {
         include: {
           category: true,
           user: { select: { id: true, name: true } },
+          recipientLabel: true,
           logs: { orderBy: { createdAt: 'desc' }, take: 3 },
         },
       })
@@ -370,12 +376,12 @@ export async function getSummary(req: AuthRequest, res: Response) {
       wallet = await prisma.wallet.findFirst({ where: { userId, type: 'PERSONAL' }, orderBy: { createdAt: 'asc' }, select: { id: true, initialBalance: true, currency: true } })
     }
 
-    if (!wallet) return res.json({ totalIncome: 0, totalExpense: 0, balance: 0, walletBalance: 0, initialBalance: 0, currency: 'VND', byDay: [], byCategory: [] })
+    if (!wallet) return res.json({ totalIncome: 0, totalExpense: 0, balance: 0, walletBalance: 0, initialBalance: 0, currency: 'VND', byDay: [], byCategory: [], byIncome: [], byRecipient: [] })
 
     const [monthlyTx, allTimeTx] = await Promise.all([
       prisma.transaction.findMany({
         where: { walletId: wallet.id, deletedAt: null, date: { gte: startDate, lte: endDate } },
-        include: { category: true },
+        include: { category: true, recipientLabel: true },
       }),
       prisma.transaction.findMany({
         where: { walletId: wallet.id, deletedAt: null },
@@ -400,11 +406,25 @@ export async function getSummary(req: AuthRequest, res: Response) {
       else byDay[day].expense += t.amount
     })
 
-    const byCategory: Record<string, { name: string; color: string; icon: string; total: number }> = {}
-    monthlyTx.filter(t => t.type === 'EXPENSE').forEach(t => {
+    const byCatExpense: Record<string, { id: string; name: string; color: string; icon: string; total: number }> = {}
+    monthlyTx.filter(t => t.type === 'EXPENSE').forEach((t: any) => {
       const k = t.categoryId
-      if (!byCategory[k]) byCategory[k] = { name: t.category.name, color: t.category.color, icon: t.category.icon, total: 0 }
-      byCategory[k].total += t.amount
+      if (!byCatExpense[k]) byCatExpense[k] = { id: k, name: t.category.name, color: t.category.color, icon: t.category.icon, total: 0 }
+      byCatExpense[k].total += t.amount
+    })
+
+    const byCatIncome: Record<string, { id: string; name: string; color: string; icon: string; total: number }> = {}
+    monthlyTx.filter(t => t.type === 'INCOME').forEach((t: any) => {
+      const k = t.categoryId
+      if (!byCatIncome[k]) byCatIncome[k] = { id: k, name: t.category.name, color: t.category.color, icon: t.category.icon, total: 0 }
+      byCatIncome[k].total += t.amount
+    })
+
+    const byRecipient: Record<string, { id: string; name: string; color: string; icon: string; total: number }> = {}
+    monthlyTx.filter((t: any) => t.type === 'EXPENSE' && t.recipientLabel).forEach((t: any) => {
+      const k = t.recipientLabelId!
+      if (!byRecipient[k]) byRecipient[k] = { id: k, name: t.recipientLabel.name, color: t.recipientLabel.color, icon: t.recipientLabel.icon, total: 0 }
+      byRecipient[k].total += t.amount
     })
 
     res.json({
@@ -415,7 +435,9 @@ export async function getSummary(req: AuthRequest, res: Response) {
       initialBalance,
       currency: wallet.currency,
       byDay: Object.entries(byDay).map(([date, v]) => ({ date, ...v })).sort((a, b) => a.date.localeCompare(b.date)),
-      byCategory: Object.values(byCategory).sort((a, b) => b.total - a.total),
+      byCategory: Object.values(byCatExpense).sort((a, b) => b.total - a.total),
+      byIncome: Object.values(byCatIncome).sort((a, b) => b.total - a.total),
+      byRecipient: Object.values(byRecipient).sort((a, b) => b.total - a.total),
     })
   } catch {
     res.status(500).json({ error: 'Lỗi server' })
@@ -532,7 +554,7 @@ export async function getCategories(req: AuthRequest, res: Response) {
 export async function createCategory(req: AuthRequest, res: Response) {
   try {
     const userId = req.userId!
-    const { name, icon, color, type } = req.body
+    const { name, icon, color, type, keywords } = req.body
 
     if (!name?.trim()) return res.status(400).json({ error: 'Cần nhập tên danh mục' })
     if (!icon?.trim()) return res.status(400).json({ error: 'Cần chọn icon' })
@@ -543,7 +565,7 @@ export async function createCategory(req: AuthRequest, res: Response) {
     if (exists) return res.status(400).json({ error: 'Danh mục này đã tồn tại' })
 
     const category = await (prisma.category as any).create({
-      data: { name: name.trim(), icon: icon.trim(), color: color.trim(), type, userId },
+      data: { name: name.trim(), icon: icon.trim(), color: color.trim(), type, userId, keywords: keywords?.trim() ?? '' },
     })
     res.status(201).json(category)
   } catch {
@@ -555,7 +577,7 @@ export async function updateCategory(req: AuthRequest, res: Response) {
   try {
     const userId = req.userId!
     const { id } = req.params
-    const { name, icon, color } = req.body
+    const { name, icon, color, keywords } = req.body
 
     const existing = await (prisma.category as any).findUnique({ where: { id } })
     if (!existing) return res.status(404).json({ error: 'Không tìm thấy danh mục' })
@@ -567,12 +589,13 @@ export async function updateCategory(req: AuthRequest, res: Response) {
       if (dup) return res.status(400).json({ error: 'Tên danh mục đã tồn tại' })
     }
 
-    const updated = await prisma.category.update({
+    const updated = await (prisma.category as any).update({
       where: { id },
       data: {
         ...(name?.trim() && { name: name.trim() }),
         ...(icon?.trim() && { icon: icon.trim() }),
         ...(color?.trim() && { color: color.trim() }),
+        ...(keywords !== undefined && { keywords: keywords?.trim() ?? '' }),
       },
     })
     res.json(updated)
@@ -664,15 +687,61 @@ export async function getWeeklySummary(req: AuthRequest, res: Response) {
     const thisWeekExpense = weeks[3].expense
     const pastWeeksAvg = (weeks[0].expense + weeks[1].expense + weeks[2].expense) / 3
 
-    const ratio = pastWeeksAvg > 0
-      ? thisWeekExpense / pastWeeksAvg
-      : thisWeekExpense > 0 ? 9 : 1 // nếu chưa có lịch sử → tỉ lệ cao
+    // Xác định mốc benchmark
+    const pastWeeksWithData = weeks.slice(0, 3).filter(w => w.expense > 0).length
+    const hasSufficientHistory = pastWeeksWithData >= 2
+
+    let benchmarkAmount = 0
+    let benchmarkType: 'HISTORY' | 'MONTHLY_BUDGET' | 'MONTHLY_ACTUAL' = 'HISTORY'
+
+    if (hasSufficientHistory) {
+      benchmarkAmount = pastWeeksAvg
+      benchmarkType = 'HISTORY'
+    } else if (walletType === 'PERSONAL') {
+      const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      try {
+        const monthlyBudget = await (prisma as any).monthlyBudget.findUnique({
+          where: { userId_month: { userId, month: currentMonthStr } },
+          select: { amount: true },
+        })
+        if (monthlyBudget?.amount > 0) {
+          benchmarkAmount = monthlyBudget.amount / 4
+          benchmarkType = 'MONTHLY_BUDGET'
+        } else {
+          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+          const monthTxns = await prisma.transaction.findMany({
+            where: { walletId, date: { gte: monthStart, lte: now }, deletedAt: null, type: 'EXPENSE' },
+            select: { amount: true },
+          })
+          benchmarkAmount = monthTxns.reduce((s, t) => s + t.amount, 0) / 4
+          benchmarkType = 'MONTHLY_ACTUAL'
+        }
+      } catch {
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+        const monthTxns = await prisma.transaction.findMany({
+          where: { walletId, date: { gte: monthStart, lte: now }, deletedAt: null, type: 'EXPENSE' },
+          select: { amount: true },
+        })
+        benchmarkAmount = monthTxns.reduce((s, t) => s + t.amount, 0) / 4
+        benchmarkType = 'MONTHLY_ACTUAL'
+      }
+    } else {
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+      const monthTxns = await prisma.transaction.findMany({
+        where: { walletId, date: { gte: monthStart, lte: now }, deletedAt: null, type: 'EXPENSE' },
+        select: { amount: true },
+      })
+      benchmarkAmount = monthTxns.reduce((s, t) => s + t.amount, 0) / 4
+      benchmarkType = 'MONTHLY_ACTUAL'
+    }
+
+    const ratio = benchmarkAmount > 0 ? thisWeekExpense / benchmarkAmount : 1
 
     let alert: 'HIGH' | 'MODERATE' | 'NORMAL' | 'GOOD' | null = null
-    if (thisWeekExpense > 0 || pastWeeksAvg > 0) {
-      if (ratio >= 1.5) alert = 'HIGH'
-      else if (ratio >= 1.2) alert = 'MODERATE'
-      else if (pastWeeksAvg > 0 && ratio <= 0.7) alert = 'GOOD'
+    if (benchmarkAmount > 0 && thisWeekExpense > 0) {
+      if (ratio >= 1.0) alert = 'HIGH'
+      else if (ratio >= 0.9) alert = 'MODERATE'
+      else if (ratio <= 0.7) alert = 'GOOD'
       else alert = 'NORMAL'
     }
 
@@ -737,6 +806,8 @@ export async function getWeeklySummary(req: AuthRequest, res: Response) {
       weeks,
       thisWeek: thisWeekExpense,
       avgExpense: Math.round(pastWeeksAvg),
+      benchmarkAmount: Math.round(benchmarkAmount),
+      benchmarkType,
       ratio: Math.round(ratio * 100) / 100,
       alert,
       topCategories,

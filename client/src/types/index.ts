@@ -3,6 +3,7 @@ export interface User {
   name: string
   email: string
   role: 'ADMIN' | 'MEMBER'
+  isAppAdmin?: boolean
   familyId: string | null
 }
 
@@ -27,6 +28,7 @@ export interface Category {
   color: string
   type: 'INCOME' | 'EXPENSE' | 'BOTH'
   isDefault: boolean
+  keywords?: string
   userId?: string | null
 }
 
@@ -36,6 +38,15 @@ export interface TransactionLog {
   byUserId: string
   byUserName: string
   snapshot: string
+  createdAt: string
+}
+
+export interface RecipientLabel {
+  id: string
+  name: string
+  icon: string
+  color: string
+  userId: string
   createdAt: string
 }
 
@@ -53,6 +64,8 @@ export interface Transaction {
   pocketId?: string | null
   pocket?: WalletPocket | null
   transferGroupId?: string | null
+  recipientLabelId?: string | null
+  recipientLabel?: RecipientLabel | null
   logs?: TransactionLog[]
   createdAt: string
 }
@@ -92,7 +105,9 @@ export interface Summary {
   initialBalance: number
   currency: string
   byDay: { date: string; income: number; expense: number }[]
-  byCategory: { name: string; color: string; icon: string; total: number }[]
+  byCategory: { id?: string; name: string; color: string; icon: string; total: number }[]
+  byIncome?: { id?: string; name: string; color: string; icon: string; total: number }[]
+  byRecipient?: { id?: string; name: string; color: string; icon: string; total: number }[]
 }
 
 export type WalletType = 'PERSONAL' | 'SHARED' | 'SUBFUND'
@@ -104,6 +119,7 @@ export interface WalletPocket {
   icon: string
   color: string
   balance: number
+  initialBalance?: number
   isHidden: boolean
   order: number
   createdAt: string
@@ -306,10 +322,14 @@ export interface WeeklyCategorySummary {
   budgetStatus: BudgetStatus | null
 }
 
+export type BenchmarkType = 'HISTORY' | 'MONTHLY_BUDGET' | 'MONTHLY_ACTUAL'
+
 export interface WeeklySummary {
   weeks: { weeksAgo: number; label: string; startDate: string; endDate: string; expense: number }[]
   thisWeek: number
   avgExpense: number
+  benchmarkAmount: number
+  benchmarkType: BenchmarkType
   ratio: number
   alert: 'HIGH' | 'MODERATE' | 'NORMAL' | 'GOOD' | null
   topCategories: WeeklyCategorySummary[]
@@ -329,6 +349,7 @@ export interface HuiRound {
   isPaid: boolean
   isReceived: boolean
   paidAt?: string | null
+  walletTransactionId?: string | null
   createdAt: string
 }
 
@@ -337,11 +358,12 @@ export interface Hui {
   name: string
   amount: number
   totalRounds: number
-  myRound: number
+  myRounds: number[]
   startDate: string
   frequency: 'MONTHLY' | 'WEEKLY'
   status: 'ACTIVE' | 'COMPLETED'
   organizerFee?: number | null
+  walletId?: string | null
   userId: string
   rounds: HuiRound[]
   createdAt: string
@@ -357,6 +379,37 @@ export interface FamilyReport {
   subFunds: { id: string; name: string; icon: string; income: number; expense: number }[]
   grandTotal: { income: number; expense: number; net: number }
   categoryBreakdown: { name: string; icon: string; color: string; amount: number }[]
+}
+
+// ─── Monthly Budgets ─────────────────────────────────────────────────────────
+
+export interface MonthlyBudgetItem {
+  id: string
+  budgetId: string
+  categoryId?: string | null
+  recipientLabelId?: string | null
+  amount: number
+  category?: Category | null
+  recipientLabel?: RecipientLabel | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MonthlyBudget {
+  id: string
+  userId: string
+  month: string
+  amount: number
+  items: MonthlyBudgetItem[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MonthlyBudgetResponse {
+  budget: MonthlyBudget | null
+  totalSpent: number
+  categorySpent: Record<string, number>
+  recipientSpent: Record<string, number>
 }
 
 export interface TransactionProposal {
