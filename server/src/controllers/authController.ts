@@ -54,7 +54,7 @@ export async function login(req: Request, res: Response) {
     if (!valid) return res.status(400).json({ error: 'Email hoặc mật khẩu không đúng' })
 
     const token = generateToken(user.id, user.role, user.familyId ?? undefined, user.tokenVersion)
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, familyId: user.familyId } })
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, isAppAdmin: user.isAppAdmin, familyId: user.familyId } })
   } catch {
     res.status(500).json({ error: 'Lỗi server' })
   }
@@ -64,7 +64,7 @@ export async function getMe(req: AuthRequest, res: Response) {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.userId },
-      select: { id: true, name: true, email: true, role: true, familyId: true, createdAt: true },
+      select: { id: true, name: true, email: true, role: true, isAppAdmin: true, familyId: true, createdAt: true },
     })
     res.json(user)
   } catch {
@@ -355,7 +355,7 @@ export async function updateProfile(req: AuthRequest, res: Response) {
         ...(name?.trim() && { name: name.trim() }),
         ...(isEmailChanging && { email: newEmail, tokenVersion: { increment: 1 } }),
       },
-      select: { id: true, name: true, email: true, role: true, familyId: true, tokenVersion: true },
+      select: { id: true, name: true, email: true, role: true, isAppAdmin: true, familyId: true, tokenVersion: true },
     })
 
     if (isEmailChanging) {

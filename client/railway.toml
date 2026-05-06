@@ -1,9 +1,10 @@
 [build]
 builder = "nixpacks"
+buildCommand = "npm run build"
 
 [build.env]
 NODE_ENV = "production"
 
 [deploy]
-startCommand = "npx serve dist -s -l $PORT"
+startCommand = "npm run build && npx serve dist -s -l $PORT"
 restartPolicyType = "on_failure"

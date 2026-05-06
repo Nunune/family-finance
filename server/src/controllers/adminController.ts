@@ -3,7 +3,7 @@ import { AuthRequest } from '../middleware/auth'
 import prisma from '../lib/prisma'
 
 export async function getStats(req: AuthRequest, res: Response) {
-  if (req.userRole !== 'ADMIN') return res.status(403).json({ error: 'Forbidden' })
+  if (!req.isAppAdmin) return res.status(403).json({ error: 'Forbidden' })
 
   const now = new Date()
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -33,7 +33,7 @@ export async function getStats(req: AuthRequest, res: Response) {
     prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
       take: 20,
-      select: { id: true, name: true, email: true, familyId: true, role: true, createdAt: true },
+      select: { id: true, name: true, email: true, familyId: true, role: true, isAppAdmin: true, createdAt: true },
     }),
     prisma.user.findMany({
       where: { createdAt: { gte: thirtyDaysAgo } },
@@ -89,8 +89,8 @@ export async function promoteUser(req: AuthRequest, res: Response) {
   }
   const user = await prisma.user.update({
     where: { email },
-    data: { role: 'ADMIN' },
-    select: { id: true, name: true, email: true, role: true },
+    data: { isAppAdmin: true },
+    select: { id: true, name: true, email: true, role: true, isAppAdmin: true },
   })
   res.json({ success: true, user })
 }
@@ -99,7 +99,7 @@ export async function exportBackup(req: AuthRequest, res: Response) {
   try {
     const userId = req.userId!
 
-    if (req.userRole !== 'ADMIN') {
+    if (!req.isAppAdmin) {
       return res.status(403).json({ error: 'Chỉ Admin mới có thể xuất backup' })
     }
 

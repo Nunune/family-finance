@@ -139,8 +139,43 @@ export default function DashboardPage() {
       {/* Category breakdown */}
       {personal && personal.byCategory.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <h2 className="font-semibold text-gray-800 mb-4">Chi tiêu cá nhân theo danh mục</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-800">Chi tiêu cá nhân theo danh mục</h2>
+            <button
+              onClick={() => navigate('/categories')}
+              className="text-xs text-emerald-600 font-medium hover:text-emerald-700 transition"
+            >
+              Xem chi tiết →
+            </button>
+          </div>
           <CategoryPieChart data={personal.byCategory} />
+        </div>
+      )}
+
+      {/* Recipient breakdown */}
+      {personal && personal.byRecipient && personal.byRecipient.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <h2 className="font-semibold text-gray-800 mb-4">Chi theo người nhận — tháng {month}/{year}</h2>
+          <div className="space-y-2">
+            {personal.byRecipient.map(r => {
+              const pct = personal.totalExpense > 0 ? (r.total / personal.totalExpense) * 100 : 0
+              return (
+                <div key={r.name} className="flex items-center gap-3">
+                  <span className="text-xl w-8 text-center">{r.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center mb-0.5">
+                      <span className="text-sm font-medium text-gray-700">{r.name}</span>
+                      <span className="text-sm font-semibold text-gray-800">{formatVND(r.total)}</span>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: r.color }} />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">{pct.toFixed(1)}% tổng chi</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 

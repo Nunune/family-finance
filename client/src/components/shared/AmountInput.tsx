@@ -39,7 +39,7 @@ export default function AmountInput({
         placeholder={placeholder ?? (isVND ? 'Số tiền (vd: 45k, 1tr5, 500.000)' : `Số tiền (${currency})`)}
         value={value}
         onChange={e => onChange(e.target.value)}
-        inputMode="decimal"
+        inputMode={isVND ? 'text' : 'decimal'}
       />
       {chips.length > 0 && !valid && (
         <div className="flex gap-1.5 flex-wrap mt-1.5">

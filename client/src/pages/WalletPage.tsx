@@ -11,6 +11,7 @@ import PocketManager from '../components/Pocket/PocketManager'
 import PocketDetail from '../components/Pocket/PocketDetail'
 import TransferForm from '../components/Transfer/TransferForm'
 import ExchangeRateCard from '../components/Wallet/ExchangeRateCard'
+import MonthlyBalanceCard from '../components/Wallet/MonthlyBalanceCard'
 import WalletMonthlyChart from '../components/Charts/WalletMonthlyChart'
 import AmountInput from '../components/shared/AmountInput'
 import { useSocket } from '../contexts/SocketContext'
@@ -50,6 +51,11 @@ export default function WalletPage({ walletType }: Props) {
   const [savingBalance, setSavingBalance] = useState(false)
   const [exporting, setExporting] = useState(false)
 
+  // Monthly closing balances for pocket cards and wallet tabs
+  const [monthlyClosing, setMonthlyClosing] = useState<{
+    wallets: { id: string; closingBalance: number; pockets: { id: string; closingBalance: number }[] }[]
+  }>({ wallets: [] })
+
   // Multi-wallet (personal only)
   const [wallets, setWallets] = useState<WalletInfo[]>([])
   const [activeWalletId, setActiveWalletId] = useState<string | null>(null)
@@ -64,6 +70,12 @@ export default function WalletPage({ walletType }: Props) {
 
   const currency = summary?.currency ?? 'VND'
   const fmt = (n: number) => fmtCurrency(n, currency)
+
+  // Helpers to look up monthly closing balance for a wallet or pocket
+  const getWalletMonthlyBalance = (walletId: string) =>
+    monthlyClosing.wallets.find(w => w.id === walletId)?.closingBalance ?? null
+  const getPocketMonthlyBalance = (pocketId: string) =>
+    monthlyClosing.wallets[0]?.pockets.find(p => p.id === pocketId)?.closingBalance ?? null
 
   // Primary wallet = VND (first created). Foreign wallet = any other.
   const primaryWalletId = wallets[0]?.id ?? null
@@ -93,13 +105,21 @@ export default function WalletPage({ walletType }: Props) {
     setLoading(true)
     setPage(0)
     try {
-      const [txRes, sumRes] = await Promise.all([
+      const requests: Promise<any>[] = [
         api.get('/transactions', { params: txParams }),
         api.get('/transactions/summary/stats', { params: sumParams }),
-      ])
+      ]
+      if (!isShared) {
+        requests.push(
+          api.get('/wallets/balance-history', { params: { month, year, walletType: 'PERSONAL' } })
+            .catch(() => ({ data: [] }))
+        )
+      }
+      const [txRes, sumRes, bhRes] = await Promise.all(requests)
       setTransactions(txRes.data.transactions)
       setHasMore(txRes.data.hasMore)
       setSummary(sumRes.data)
+      if (bhRes) setMonthlyClosing({ wallets: bhRes.data })
     } finally { setLoading(false) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletType, activeWalletId, startDate, endDate, month, year])
@@ -255,6 +275,8 @@ export default function WalletPage({ walletType }: Props) {
           <div className="flex items-center gap-2 flex-wrap">
             {wallets.map(w => {
               const isActive = activeWalletId === w.id
+              const monthlyBal = getWalletMonthlyBalance(w.id)
+              const displayBal = monthlyBal ?? w.balance
               return (
                 <button
                   key={w.id}
@@ -271,7 +293,7 @@ export default function WalletPage({ walletType }: Props) {
                   </div>
                   {showWalletBalance && (
                     <span className={`text-[10px] font-normal leading-tight ${isActive ? 'opacity-80 text-white' : 'text-gray-400'}`}>
-                      {fmtCurrency(w.balance, w.currency)}
+                      {fmtCurrency(displayBal, w.currency)}
                     </span>
                   )}
                 </button>
@@ -332,10 +354,30 @@ export default function WalletPage({ walletType }: Props) {
 
       {/* Total wallet balance */}
       {summary && (() => {
+        // Use monthly closing balance for pocket hidden-balance calculation
         const hiddenBalance = !isShared && !isViewingForeignWallet
-          ? pockets.filter(p => p.isHidden).reduce((s, p) => s + p.balance, 0)
+          ? pockets.filter(p => p.isHidden).reduce((s, p) => {
+              const mb = getPocketMonthlyBalance(p.id)
+              return s + (mb ?? p.balance)
+            }, 0)
           : 0
-        const displayBalance = combinedVndTotal ?? summary.walletBalance
+
+        // Monthly closing for each wallet (used in multi-wallet combined view)
+        const combinedMonthly = !isShared && wallets.length > 1 && !activeWalletId && monthlyClosing.wallets.length > 0
+          ? monthlyClosing.wallets.reduce((s, mw) => {
+              const w = wallets.find(w => w.id === mw.id)
+              if (!w) return s
+              if (w.currency === 'VND') return s + mw.closingBalance
+              const rate = exchangeRates.find(r => r.fromCurrency === w.currency && r.toCurrency === 'VND')
+              return rate ? s + Math.round(mw.closingBalance * rate.rate) : s
+            }, 0)
+          : null
+
+        const singleMonthly = activeWalletId
+          ? getWalletMonthlyBalance(activeWalletId)
+          : getWalletMonthlyBalance(primaryWalletId ?? '')
+
+        const displayBalance = combinedMonthly ?? singleMonthly ?? (combinedVndTotal ?? summary.walletBalance)
         const availableBalance = displayBalance - hiddenBalance
         const isPositive = displayBalance >= 0
         return (
@@ -345,22 +387,24 @@ export default function WalletPage({ walletType }: Props) {
             <div className="flex items-start justify-between">
               <div className="flex-1 min-w-0">
                 <p className="text-sm opacity-80">
-                  {combinedVndTotal != null ? 'Tổng tài sản (quy đổi VND)' : hiddenBalance > 0 ? 'Tổng số dư' : 'Số dư hiện tại'}
+                  {combinedMonthly != null || combinedVndTotal != null ? `Tổng tài sản T${month}/${year}` : hiddenBalance > 0 ? `Tổng số dư T${month}/${year}` : `Số dư cuối T${month}/${year}`}
                 </p>
                 <p className="text-2xl font-bold mt-0.5">{fmtCurrency(displayBalance, 'VND')}</p>
 
                 {/* Per-wallet breakdown when showing combined */}
-                {combinedVndTotal != null && (
+                {(combinedMonthly != null || combinedVndTotal != null) && (
                   <div className="mt-2 space-y-1">
                     {wallets.map(w => {
+                      const mw = monthlyClosing.wallets.find(x => x.id === w.id)
+                      const wBal = mw?.closingBalance ?? w.balance
                       const rate = w.currency !== 'VND'
                         ? exchangeRates.find(r => r.fromCurrency === w.currency && r.toCurrency === 'VND')
                         : null
-                      const vndEquiv = rate ? Math.round(w.balance * rate.rate) : null
+                      const vndEquiv = rate ? Math.round(wBal * rate.rate) : null
                       return (
                         <div key={w.id} className="flex items-center gap-1.5 text-xs opacity-80">
                           <span>{getCurrency(w.currency).symbol}</span>
-                          <span>{fmtCurrency(w.balance, w.currency)}</span>
+                          <span>{fmtCurrency(wBal, w.currency)}</span>
                           {vndEquiv != null && (
                             <span className="opacity-60">≈ {fmtCurrency(vndEquiv, 'VND')}</span>
                           )}
@@ -409,24 +453,28 @@ export default function WalletPage({ walletType }: Props) {
       {/* Pocket cards — personal only, not shown when viewing a foreign wallet */}
       {!isShared && pockets.length > 0 && !isViewingForeignWallet && (
         <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
-          {pockets.map(pocket => (
-            <div
-              key={pocket.id}
-              className="shrink-0 bg-white rounded-2xl border border-gray-100 p-3 w-36 cursor-pointer hover:border-indigo-200 hover:shadow-sm transition"
-              onClick={() => setActivePocket(pocket)}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xl">{pocket.icon}</span>
-                {pocket.isHidden && <span className="text-gray-400 text-xs">🔒</span>}
+          {pockets.map(pocket => {
+            const monthlyBal = getPocketMonthlyBalance(pocket.id)
+            const displayBal = monthlyBal ?? pocket.balance
+            return (
+              <div
+                key={pocket.id}
+                className="shrink-0 bg-white rounded-2xl border border-gray-100 p-3 w-36 cursor-pointer hover:border-indigo-200 hover:shadow-sm transition"
+                onClick={() => setActivePocket(pocket)}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xl">{pocket.icon}</span>
+                  {pocket.isHidden && <span className="text-gray-400 text-xs">🔒</span>}
+                </div>
+                <p className="text-xs text-gray-500 truncate">{pocket.name}</p>
+                <p className="text-sm font-bold text-gray-800 mt-0.5"
+                  style={{ color: displayBal < 0 ? '#EF4444' : undefined }}>
+                  {displayBal.toLocaleString('vi-VN')}₫
+                </p>
+                <p className="text-[10px] text-gray-300 mt-0.5">T{month}/{year}</p>
               </div>
-              <p className="text-xs text-gray-500 truncate">{pocket.name}</p>
-              <p className="text-sm font-bold text-gray-800 mt-0.5"
-                style={{ color: pocket.balance < 0 ? '#EF4444' : undefined }}>
-                {pocket.balance.toLocaleString('vi-VN')}₫
-              </p>
-              <p className="text-[10px] text-gray-300 mt-0.5">Nhấn để xem</p>
-            </div>
-          ))}
+            )
+          })}
           <button
             onClick={() => setShowPocketManager(true)}
             className="shrink-0 w-20 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-300 hover:border-emerald-300 hover:text-emerald-400 transition text-2xl"
@@ -490,6 +538,9 @@ export default function WalletPage({ walletType }: Props) {
 
       {/* Weekly insight */}
       <WeeklyInsightCard walletType={walletType} />
+
+      {/* Monthly actual balance */}
+      {!isShared && !activePocket && <MonthlyBalanceCard month={month} year={year} walletType="PERSONAL" />}
 
       {/* Charts */}
       {summary && summary.byDay.length > 0 && (

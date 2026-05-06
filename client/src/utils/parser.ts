@@ -348,6 +348,28 @@ export function parseDebt(text: string): DebtParseResult | null {
   return { debtType, amount, amountConfidence: confidence, amountRaw, counterparty: remaining }
 }
 
+// ─── Hui detection ─────────────────────────────────────────────────────────
+
+export interface HuiParseResult {
+  amount: number | null
+  amountConfidence: Confidence
+  amountRaw: string
+  roundNo: number | null
+}
+
+export function parseHui(text: string): HuiParseResult | null {
+  const t = normalizeSpaces(text)
+  const lower = t.toLowerCase().trim()
+  if (!lower.includes('hụi') && !lower.includes('hui')) return null
+
+  const { amount, confidence, raw: amountRaw } = parseAmount(t)
+
+  const roundMatch = lower.match(/k[yỳ]\s*(\d+)/)
+  const roundNo = roundMatch ? parseInt(roundMatch[1]) : null
+
+  return { amount, amountConfidence: confidence, amountRaw, roundNo }
+}
+
 // ─── Main parse ────────────────────────────────────────────────────────────
 
 export function parseInput(text: string, categories: Category[]): ParseResult {

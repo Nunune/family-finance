@@ -1,9 +1,10 @@
 import { useState, useEffect, FormEvent } from 'react'
 import api from '../../services/api'
-import { Category, WalletType, Transaction, WalletPocket, WalletInfo } from '../../types'
+import { Category, WalletType, Transaction, WalletPocket, WalletInfo, RecipientLabel } from '../../types'
 import { format } from 'date-fns'
 import { parseAmount, fmtVND } from '../../utils/amountParser'
 import { fmtCurrency, getCurrency } from '../../utils/currency'
+import RecipientPicker from './RecipientPicker'
 
 interface Props {
   walletType: WalletType
@@ -26,6 +27,8 @@ export default function TransactionForm({ walletType, pockets = [], wallets = []
   const [selectedWalletId, setSelectedWalletId] = useState<string | null>(
     editing?.walletId ?? activeWalletId ?? null
   )
+  const [recipientLabelId, setRecipientLabelId] = useState<string | null>(editing?.recipientLabelId ?? null)
+  const [recipientLabels, setRecipientLabels] = useState<RecipientLabel[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -36,6 +39,7 @@ export default function TransactionForm({ walletType, pockets = [], wallets = []
 
   useEffect(() => {
     api.get('/transactions/categories/all').then(r => setCategories(r.data))
+    api.get('/recipients').then(r => setRecipientLabels(r.data)).catch(() => {})
   }, [])
 
   const filtered = categories.filter(c => c.type === type || c.type === 'BOTH')
@@ -56,10 +60,10 @@ export default function TransactionForm({ walletType, pockets = [], wallets = []
       const pocket = walletType === 'PERSONAL' ? pocketId || null : null
       const amount = String(parsedAmount)
       if (editing) {
-        await api.put(`/transactions/${editing.id}`, { amount, type, date, note, categoryId, pocketId: pocket })
+        await api.put(`/transactions/${editing.id}`, { amount, type, date, note, categoryId, pocketId: pocket, recipientLabelId })
       } else {
         const wt = subFundId ? 'SUBFUND' : walletType
-        const body: Record<string, unknown> = { amount, type, date, note, categoryId, walletType: wt, pocketId: pocket, subFundId: subFundId ?? null }
+        const body: Record<string, unknown> = { amount, type, date, note, categoryId, walletType: wt, pocketId: pocket, subFundId: subFundId ?? null, recipientLabelId }
         if (selectedWalletId && walletType === 'PERSONAL' && !subFundId) {
           body.walletId = selectedWalletId
         }
@@ -121,6 +125,20 @@ export default function TransactionForm({ walletType, pockets = [], wallets = []
               ))}
             </div>
           </div>
+
+          {type === 'EXPENSE' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Dành cho <span className="text-gray-400 font-normal text-xs">(tuỳ chọn)</span>
+              </label>
+              <RecipientPicker
+                labels={recipientLabels}
+                selected={recipientLabelId}
+                onChange={setRecipientLabelId}
+                onLabelsChange={setRecipientLabels}
+              />
+            </div>
+          )}
 
           {walletType === 'PERSONAL' && !subFundId && wallets.length > 1 && (
             <div>

@@ -19,6 +19,7 @@ interface Stats {
     email: string
     familyId: string | null
     role: string
+    isAppAdmin: boolean
     createdAt: string
   }[]
 }
@@ -129,7 +130,8 @@ export default function AdminPage() {
                     ? <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full">Có gia đình</span>
                     : <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">Chưa có gia đình</span>
                   }
-                  {u.role === 'ADMIN' && <span className="text-[10px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full">Admin</span>}
+                  {u.role === 'ADMIN' && <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">Trưởng nhóm</span>}
+                  {u.isAppAdmin && <span className="text-[10px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full">App Admin</span>}
                 </div>
               </div>
             </div>

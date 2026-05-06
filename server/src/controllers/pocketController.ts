@@ -38,6 +38,7 @@ export async function createPocket(req: AuthRequest, res: Response) {
         icon: icon?.trim() || '💰',
         color: color || '#6B7280',
         balance: parseFloat(balance) || 0,
+        initialBalance: parseFloat(balance) || 0,
         isHidden: isHidden ?? false,
         order: count,
       },
@@ -55,7 +56,7 @@ export async function updatePocket(req: AuthRequest, res: Response) {
     const pocket = await wp().findUnique({ where: { id } })
     if (!pocket || !wallet || pocket.walletId !== wallet.id)
       return res.status(404).json({ error: 'Không tìm thấy ví' })
-    const { name, icon, color, balance, isHidden } = req.body
+    const { name, icon, color, balance, isHidden, initialBalance } = req.body
     const updated = await wp().update({
       where: { id },
       data: {
@@ -64,6 +65,7 @@ export async function updatePocket(req: AuthRequest, res: Response) {
         ...(color !== undefined && { color }),
         ...(balance !== undefined && { balance: parseFloat(balance) || 0 }),
         ...(isHidden !== undefined && { isHidden }),
+        ...(initialBalance !== undefined && { initialBalance: parseFloat(initialBalance) || 0 }),
       },
     })
     res.json(updated)

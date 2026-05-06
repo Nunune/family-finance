@@ -134,6 +134,11 @@ export default function TransactionList({ transactions, onEdit, onDelete, showUs
     if (!grouped[day]) grouped[day] = []
     grouped[day].push(t)
   })
+  Object.values(grouped).forEach(items =>
+    items.sort((a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || b.amount - a.amount
+    )
+  )
 
   return (
     <div className="space-y-4">
@@ -179,6 +184,14 @@ export default function TransactionList({ transactions, onEdit, onDelete, showUs
                             {t.transferGroupId && (
                               <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full">↔</span>
                             )}
+                            {t.recipientLabel && (
+                              <span
+                                className="text-[10px] px-1.5 py-0.5 rounded-full text-white font-medium"
+                                style={{ backgroundColor: t.recipientLabel.color }}
+                              >
+                                {t.recipientLabel.icon} {t.recipientLabel.name}
+                              </span>
+                            )}
                             {showUser && (
                               <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">{t.user.name}</span>
                             )}
@@ -186,7 +199,10 @@ export default function TransactionList({ transactions, onEdit, onDelete, showUs
                               <span className="text-xs text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded-full">đã sửa</span>
                             )}
                           </div>
-                          {t.note && <p className="text-xs text-gray-400 truncate mt-0.5">{t.note}</p>}
+                          <p className="text-xs text-gray-400 truncate mt-0.5">
+                            <span className="text-gray-300 mr-1">{format(new Date(t.createdAt), 'HH:mm')}</span>
+                            {t.note && <span>{t.note}</span>}
+                          </p>
                         </div>
 
                         <div className="flex items-center gap-2 flex-shrink-0">

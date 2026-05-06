@@ -85,7 +85,11 @@ export default function Navbar() {
               )}
             </NavLink>
 
-            {user?.role === 'ADMIN' && (
+            <NavLink to="/categories" className={({ isActive }) =>
+              `px-3 py-1.5 rounded-lg text-sm font-medium transition ${isActive ? 'bg-emerald-50 text-emerald-700' : 'text-gray-600 hover:text-gray-900'}`
+            }>Danh mục</NavLink>
+
+            {user?.isAppAdmin && (
               <NavLink to="/admin" className={({ isActive }) =>
                 `px-3 py-1.5 rounded-lg text-sm font-medium transition ${isActive ? 'bg-amber-50 text-amber-700' : 'text-gray-600 hover:text-gray-900'}`
               }>Admin</NavLink>
@@ -141,9 +145,9 @@ export default function Navbar() {
                   </button>
                   <button onClick={() => { setShowUserMenu(false); navigate('/categories') }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition">
-                    Quản lý danh mục
+                    📊 Báo cáo danh mục
                   </button>
-                  {user?.role === 'ADMIN' && (
+                  {user?.isAppAdmin && (
                     <button onClick={() => { setShowUserMenu(false); navigate('/admin') }}
                       className="w-full text-left px-4 py-2 text-sm text-amber-600 hover:bg-amber-50 transition">
                       Báo cáo Admin

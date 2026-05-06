@@ -12,6 +12,7 @@
     "db:backup": "node scripts/backup-pg.mjs",
     "db:backup:local": "node scripts/backup-db.mjs",
     "db:seed": "tsx src/prisma/seed.ts",
+    "db:migrate-hui": "node scripts/migrate-hui-slots.mjs",
     "postinstall": "prisma generate --schema=src/prisma/schema.prisma"
   },
   "dependencies": {

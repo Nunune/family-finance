@@ -12,6 +12,7 @@ const JWT_SECRET = requireEnv('JWT_SECRET')
 export interface AuthRequest extends Request {
   userId?: string
   userRole?: string
+  isAppAdmin?: boolean
   familyId?: string
 }
 
@@ -30,7 +31,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     // Always read role + familyId from DB so promotions/changes take effect without re-login
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { role: true, familyId: true, tokenVersion: true },
+      select: { role: true, isAppAdmin: true, familyId: true, tokenVersion: true },
     })
     if (!user) return res.status(401).json({ error: 'Tài khoản không tồn tại' })
 
@@ -41,6 +42,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
 
     req.userId = payload.userId
     req.userRole = user.role
+    req.isAppAdmin = user.isAppAdmin
     req.familyId = user.familyId ?? payload.familyId
     next()
   } catch {
