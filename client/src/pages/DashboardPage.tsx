@@ -5,6 +5,7 @@ import { Summary, Category, TransactionProposal } from '../types'
 import DailyBarChart from '../components/Charts/DailyBarChart'
 import CategoryPieChart from '../components/Charts/CategoryPieChart'
 import WeeklyInsightCard from '../components/Charts/WeeklyInsightCard'
+import MonthCalendar from '../components/Charts/MonthCalendar'
 import QuickAdd from '../components/Transaction/QuickAdd'
 import { useNavigate } from 'react-router-dom'
 
@@ -132,6 +133,11 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Monthly calendar */}
+      {personal && (
+        <MonthCalendar byDay={personal.byDay} year={year} month={month} walletType="PERSONAL" />
+      )}
 
       {/* Weekly insight */}
       <WeeklyInsightCard walletType="PERSONAL" />
