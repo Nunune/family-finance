@@ -12,7 +12,6 @@ export default function BottomNav() {
     ...(user?.familyId ? [{ to: '/shared', icon: '🏦', label: 'Quỹ chung', end: false }] : []),
     { to: '/family', icon: '👨‍👩‍👧', label: 'Gia đình', end: false },
     { to: '/plans', icon: '📋', label: 'Kế hoạch', end: false, badge: pending },
-    { to: '/budget', icon: '💰', label: 'Ngân sách', end: false },
     { to: '/categories', icon: '📊', label: 'Danh mục', end: false },
   ]
 

@@ -12,8 +12,9 @@ import SavingsGoalForm from '../components/Savings/SavingsGoalForm'
 import PlanItemList from '../components/Plan/PlanItemList'
 import HuiList from '../components/Hui/HuiList'
 import HuiForm from '../components/Hui/HuiForm'
+import MonthlyBudgetTab from '../components/Plan/MonthlyBudgetTab'
 
-type Tab = 'debts' | 'recurring' | 'proposals' | 'savings' | 'forecast' | 'hui'
+type Tab = 'debts' | 'recurring' | 'proposals' | 'savings' | 'forecast' | 'hui' | 'budget'
 
 export default function PlansPage() {
   const { user } = useAuth()
@@ -65,6 +66,7 @@ export default function PlansPage() {
 
   const tabs: { key: Tab; label: string; badge?: number }[] = [
     { key: 'forecast', label: '📅 Dự thu/chi' },
+    { key: 'budget', label: '💰 Ngân sách' },
     { key: 'savings', label: '🎯 Quỹ' },
     { key: 'hui', label: '🔄 Hụi' },
     { key: 'debts', label: 'Nợ & Vay' },
@@ -102,11 +104,11 @@ export default function PlansPage() {
         )}
       </div>
 
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-5">
+      <div className="flex gap-2 overflow-x-auto pb-1 mb-5 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition relative ${
-              tab === t.key ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'
+            className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition relative whitespace-nowrap ${
+              tab === t.key ? 'bg-emerald-500 text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
             }`}>
             {t.label}
             {(t.badge ?? 0) > 0 && (
@@ -123,6 +125,8 @@ export default function PlansPage() {
       ) : (
         <>
           {tab === 'forecast' && <PlanItemList />}
+
+          {tab === 'budget' && <MonthlyBudgetTab />}
 
           {tab === 'hui' && (
             <HuiList
