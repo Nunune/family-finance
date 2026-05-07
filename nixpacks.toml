@@ -1,7 +1,7 @@
 [phases.install]
 cmds = [
-  "cd client && npm ci",
-  "cd server && npm ci"
+  "cd client && npm ci --include=dev",
+  "cd server && npm ci --include=dev"
 ]
 
 [phases.build]
