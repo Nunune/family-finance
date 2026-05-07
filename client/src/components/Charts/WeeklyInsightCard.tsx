@@ -248,7 +248,7 @@ export default function WeeklyInsightCard({ walletType = 'PERSONAL' }: { walletT
                 <div className="w-full flex items-end" style={{ height: 48 }}>
                   <div
                     className={`w-full rounded-t-lg transition-all ${
-                      isCurrent ? cfg.bar : 'bg-gray-200'
+                      isCurrent ? 'bg-red-400' : 'bg-gray-200'
                     }`}
                     style={{ height: `${Math.max(heightPct, week.expense > 0 ? 8 : 0)}%` }}
                   />
@@ -389,7 +389,7 @@ export default function WeeklyInsightCard({ walletType = 'PERSONAL' }: { walletT
                     ) : (
                       <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${cfg.bar}`}
+                          className="h-full rounded-full bg-red-300"
                           style={{ width: `${barWidth}%` }}
                         />
                       </div>
