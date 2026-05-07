@@ -14,6 +14,7 @@ interface AuthContextType {
   dismissExpiryWarning: () => void
   updateProfile: (data: { name?: string; email?: string; currentPassword: string }) => Promise<void>
   changePassword: (data: { currentPassword: string; newPassword: string }) => Promise<void>
+  setBackupEmailPreference: (enabled: boolean) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>(null!)
@@ -119,8 +120,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     scheduleExpiryCheck(r.data.token)
   }
 
+  async function setBackupEmailPreference(enabled: boolean) {
+    await api.patch('/auth/backup-email', { enabled })
+    setUser(prev => prev ? { ...prev, receiveBackupEmail: enabled } : prev)
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, tokenExpiring, login, register, logout, logoutAll, refreshUser, dismissExpiryWarning, updateProfile, changePassword }}>
+    <AuthContext.Provider value={{ user, loading, tokenExpiring, login, register, logout, logoutAll, refreshUser, dismissExpiryWarning, updateProfile, changePassword, setBackupEmailPreference }}>
       {children}
     </AuthContext.Provider>
   )

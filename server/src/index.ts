@@ -24,6 +24,7 @@ import monthlyBudgetRoutes from './routes/monthlyBudgets'
 import { setupSocket } from './socket/handlers'
 import { authLimiter, apiLimiter } from './middleware/rateLimit'
 import { runRecurringScheduler } from './controllers/recurringController'
+import { startBackupJob } from './jobs/backupJob'
 
 const app = express()
 app.set('trust proxy', 1)
@@ -97,6 +98,7 @@ setupSocket(io)
 
 runRecurringScheduler()
 setInterval(runRecurringScheduler, 60 * 60 * 1000)
+startBackupJob()
 
 const PORT = process.env.PORT || 3001
 httpServer.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`))

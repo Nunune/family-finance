@@ -64,7 +64,7 @@ export async function getMe(req: AuthRequest, res: Response) {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.userId },
-      select: { id: true, name: true, email: true, role: true, isAppAdmin: true, familyId: true, createdAt: true },
+      select: { id: true, name: true, email: true, role: true, isAppAdmin: true, familyId: true, createdAt: true, receiveBackupEmail: true },
     })
     res.json(user)
   } catch {
@@ -539,3 +539,14 @@ export async function getFamilyReport(req: AuthRequest, res: Response) {
     res.status(500).json({ error: 'Lỗi server' })
   }
 }
+
+export async function setBackupEmailPreference(req: AuthRequest, res: Response) {
+  const { enabled } = req.body
+  if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled phải là true/false' })
+  await (prisma.user as any).update({
+    where: { id: req.userId! },
+    data: { receiveBackupEmail: enabled },
+  })
+  res.json({ success: true, receiveBackupEmail: enabled })
+}
+

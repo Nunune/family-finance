@@ -44,6 +44,7 @@ model User {
   resetToken          String?
   resetTokenExpiresAt DateTime?
   tokenVersion        Int       @default(0)
+  receiveBackupEmail  Boolean   @default(false)
   family              Family?   @relation(fields: [familyId], references: [id])
   personalWallets     Wallet[]  @relation("PersonalWallet")
   exchangeRates       ExchangeRate[]

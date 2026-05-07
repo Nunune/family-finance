@@ -5,6 +5,7 @@ export interface User {
   role: 'ADMIN' | 'MEMBER'
   isAppAdmin?: boolean
   familyId: string | null
+  receiveBackupEmail?: boolean
 }
 
 export interface Family {
