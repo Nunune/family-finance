@@ -40,7 +40,7 @@ function AppContent() {
         <img src="/avocado.png" alt="loading" className="w-48 h-48 object-contain" style={{ animation: 'float 2s ease-in-out infinite' }} />
         <div className="flex flex-col items-center gap-1">
           <h1 className="text-xl font-bold text-gray-800">Tiền Tui</h1>
-          <p className="text-sm text-gray-400">Gia đình</p>
+          <p className="text-sm text-gray-400">Tiền tui · Tui quản · Tui vui!</p>
         </div>
         <div className="flex gap-1.5">
           {[0, 1, 2].map(i => (
