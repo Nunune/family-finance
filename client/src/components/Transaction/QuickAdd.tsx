@@ -402,12 +402,16 @@ export default function QuickAdd({ walletType, categories, onSuccess, subFundId,
       const debt = parseDebt(val)
       setDebtResult(debt)
       if (debt) { setDebtTypeManual(debt.debtType); setCounterpartyManual(debt.counterparty) }
-      setResult(debt ? null : parseInput(val, categories))
+      const parsed = debt ? null : parseInput(val, categories)
+      setResult(parsed)
       setKeywordMatches(debt ? [] : matchKeywordCategories(val, categories))
+      // Auto-gợi ý recipient label từ text
+      if (!debt) setRecipientLabelId(matchRecipientLabel(val, recipientLabels))
     } else {
       setResult(null); setDebtResult(null); setHuiResult(null); setKeywordMatches([])
+      setRecipientLabelId(null)
     }
-  }, [categories])
+  }, [categories, recipientLabels])
 
   // Chế độ hoạt động: ưu tiên modeOverride, sau đó parser
   const activeMode: 'INCOME' | 'EXPENSE' | 'DEBT' | 'HUI' =
@@ -903,8 +907,13 @@ export default function QuickAdd({ walletType, categories, onSuccess, subFundId,
                   />
                   {result && (
                     <FieldBadge
-                      label={format(finalDate, 'dd/MM', { locale: vi })}
-                      value="" confidence={result.dateConfidence}
+                      label="Ngày"
+                      value={
+                        result.dateConfidence === 'low'
+                          ? 'Hôm nay'
+                          : format(finalDate, 'dd/MM', { locale: vi })
+                      }
+                      confidence={result.dateConfidence}
                     />
                   )}
                 </div>

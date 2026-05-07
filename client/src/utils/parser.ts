@@ -213,38 +213,54 @@ function parseCategory(
 
 // ─── Date ──────────────────────────────────────────────────────────────────
 
-function parseDate(text: string): { date: Date; confidence: Confidence } {
+function parseDate(text: string): { date: Date; confidence: Confidence; matchedStr: string } {
   const lower = text.toLowerCase()
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  if (lower.includes('hôm qua') || lower.includes('tối qua') || lower.includes('sáng qua')) {
-    return { date: subDays(today, 1), confidence: 'high' }
-  }
-  if (lower.includes('hôm kia')) return { date: subDays(today, 2), confidence: 'high' }
-  if (lower.includes('hôm nay') || lower.includes('sáng nay') || lower.includes('tối nay') || lower.includes('trưa nay')) {
-    return { date: today, confidence: 'high' }
+  if (lower.includes('hôm qua') || lower.includes('tối qua') || lower.includes('sáng qua'))
+    return { date: subDays(today, 1), confidence: 'high', matchedStr: 'hôm qua' }
+  if (lower.includes('hôm kia'))
+    return { date: subDays(today, 2), confidence: 'high', matchedStr: 'hôm kia' }
+  if (lower.includes('hôm nay') || lower.includes('sáng nay') || lower.includes('tối nay') || lower.includes('trưa nay'))
+    return { date: today, confidence: 'high', matchedStr: 'hôm nay' }
+
+  // "ngày X tháng Y" hoặc "ngày X/Y"
+  const ngayThang = lower.match(/ngày\s+(\d{1,2})(?:\s+tháng\s+(\d{1,2})|\/(\d{1,2}))?/)
+  if (ngayThang) {
+    const day = parseInt(ngayThang[1])
+    const month = ngayThang[2] ? parseInt(ngayThang[2]) - 1
+                : ngayThang[3] ? parseInt(ngayThang[3]) - 1
+                : today.getMonth()
+    return { date: new Date(today.getFullYear(), month, day), confidence: 'high', matchedStr: ngayThang[0] }
   }
 
-  const dayMatch = lower.match(/ngày\s+(\d{1,2})(?:\/(\d{1,2}))?/)
-  if (dayMatch) {
-    const day = parseInt(dayMatch[1])
-    const month = dayMatch[2] ? parseInt(dayMatch[2]) - 1 : today.getMonth()
-    const d = new Date(today.getFullYear(), month, day)
-    return { date: d, confidence: 'high' }
+  // "dd/MM" — ví dụ: 5/5, 15/3, 01/12
+  const slashDate = lower.match(/\b(\d{1,2})\/(\d{1,2})\b/)
+  if (slashDate) {
+    const day = parseInt(slashDate[1])
+    const month = parseInt(slashDate[2]) - 1
+    if (day >= 1 && day <= 31 && month >= 0 && month <= 11)
+      return { date: new Date(today.getFullYear(), month, day), confidence: 'high', matchedStr: slashDate[0] }
   }
 
-  return { date: today, confidence: 'low' }
+  return { date: today, confidence: 'low', matchedStr: '' }
 }
 
 // ─── Note ──────────────────────────────────────────────────────────────────
 
-function extractNote(text: string, amountRaw: string): string {
+function extractNote(text: string, amountRaw: string, dateMatchedStr: string): string {
   let note = text
   if (amountRaw) note = note.replace(amountRaw, '')
-  // Bỏ các từ khóa đã parse
-  const stopWords = ['hôm nay', 'hôm qua', 'hôm kia', 'sáng nay', 'tối qua', 'tối nay', 'trưa nay']
+  // Bỏ từ đơn vị tiền còn sót
+  note = note.replace(/\b(triệu|tr|củ|lít|nghìn|ngàn)\b/gi, '')
+  // Bỏ ngày đã nhận dạng
+  const stopWords = ['hôm nay', 'hôm qua', 'hôm kia', 'sáng nay', 'tối qua', 'tối nay', 'trưa nay', 'sáng qua']
   stopWords.forEach(w => { note = note.replace(new RegExp(w, 'gi'), '') })
+  if (dateMatchedStr) note = note.replace(new RegExp(dateMatchedStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '')
+  // Bỏ pattern ngày tháng còn sót: "ngày X", "X/Y"
+  note = note.replace(/ngày\s+\d{1,2}(?:\s+tháng\s+\d{1,2}|\/\d{1,2})?/gi, '')
+  note = note.replace(/\b\d{1,2}\/\d{1,2}\b/g, '')
   return note.replace(/\s+/g, ' ').trim()
 }
 
@@ -378,8 +394,8 @@ export function parseInput(text: string, categories: Category[]): ParseResult {
   const { amount, confidence: amountConf, raw: amountRaw } = parseAmount(t)
   const { type, confidence: typeConf } = parseType(t)
   const { categoryId, categoryName, confidence: catConf } = parseCategory(t, type, categories, patterns)
-  const { date, confidence: dateConf } = parseDate(t)
-  const note = extractNote(t, amountRaw)
+  const { date, confidence: dateConf, matchedStr: dateMatchedStr } = parseDate(t)
+  const note = extractNote(t, amountRaw, dateMatchedStr)
 
   const overallReady = amountConf === 'high' && catConf === 'high'
 

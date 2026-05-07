@@ -48,7 +48,7 @@ export default function Navbar() {
         <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 font-bold text-emerald-600 text-lg">
-              💰 <span className="hidden sm:inline">Thu Chi Gia Đình</span>
+              💰 <span className="hidden sm:inline">Tiền Tui</span>
             </div>
             <span className="hidden md:inline text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-lg">
               📅 {todayLabel()}

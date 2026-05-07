@@ -39,7 +39,7 @@ function AppContent() {
       <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex flex-col items-center justify-center gap-4">
         <img src="/avocado.png" alt="loading" className="w-48 h-48 object-contain" style={{ animation: 'float 2s ease-in-out infinite' }} />
         <div className="flex flex-col items-center gap-1">
-          <h1 className="text-xl font-bold text-gray-800">Quản lý Thu Chi</h1>
+          <h1 className="text-xl font-bold text-gray-800">Tiền Tui</h1>
           <p className="text-sm text-gray-400">Gia đình</p>
         </div>
         <div className="flex gap-1.5">

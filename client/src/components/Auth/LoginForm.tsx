@@ -33,7 +33,7 @@ export default function LoginForm({ onSwitch, onForgot }: Props) {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
         <div className="text-center mb-8">
           <div className="text-4xl mb-2">💰</div>
-          <h1 className="text-2xl font-bold text-gray-800">Quản lý Thu Chi</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Tiền Tui</h1>
           <p className="text-gray-500 text-sm mt-1">Gia đình</p>
         </div>
 
