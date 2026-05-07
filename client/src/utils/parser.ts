@@ -76,18 +76,20 @@ function parseAmount(text: string): { amount: number | null; confidence: Confide
     if (base !== null) return { amount: Math.round((base + 0.5) * 1_000), confidence: 'high', raw: ruoiK[0] }
   }
 
-  // Compact notation: "1tr5" = 1.5tr = 1,500,000; "2k3" = 2,300
-  const compactTr = t.match(/(\d+)\s*(?:triệu|tr|củ|lít)\s*([1-9])(?!\d)/i)
+  // Compact notation: "1tr5"=1.5M | "1tr50"=1.05M | "2tr630"=2.63M | "2k3"=2.3k | "2k30"=2.03k
+  const compactTr = t.match(/(\d+)\s*(?:triệu|tr|củ|lít)\s*([1-9]\d{0,2})(?!\d)/i)
   if (compactTr) {
     const base = parseInt(compactTr[1])
     const suffix = parseInt(compactTr[2])
-    return { amount: base * 1_000_000 + suffix * 100_000, confidence: 'high', raw: compactTr[0] }
+    const mul = compactTr[2].length === 1 ? 100_000 : compactTr[2].length === 2 ? 10_000 : 1_000
+    return { amount: base * 1_000_000 + suffix * mul, confidence: 'high', raw: compactTr[0] }
   }
-  const compactK = t.match(/(\d+)\s*(?:nghìn|ngàn|k)\s*([1-9])(?!\d)/i)
+  const compactK = t.match(/(\d+)\s*(?:nghìn|ngàn|k)\s*([1-9]\d{0,2})(?!\d)/i)
   if (compactK) {
     const base = parseInt(compactK[1])
     const suffix = parseInt(compactK[2])
-    return { amount: base * 1_000 + suffix * 100, confidence: 'high', raw: compactK[0] }
+    const mul = compactK[2].length === 1 ? 100 : compactK[2].length === 2 ? 10 : 1
+    return { amount: base * 1_000 + suffix * mul, confidence: 'high', raw: compactK[0] }
   }
 
   // Pattern có đơn vị rõ ràng
