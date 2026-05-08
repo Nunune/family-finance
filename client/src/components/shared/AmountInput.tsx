@@ -1,4 +1,4 @@
-import { parseAmount, fmtVND } from '../../utils/amountParser'
+import { parseAmount, parseExpression, hasOperator, fmtVND } from '../../utils/amountParser'
 import { fmtCurrency } from '../../utils/currency'
 
 const VND_CHIPS = ['20k', '50k', '100k', '200k', '500k', '1tr', '2tr', '5tr']
@@ -23,14 +23,26 @@ export default function AmountInput({
   const isVND = currency === 'VND'
   const chips = chipSet ?? (isVND ? VND_CHIPS : [])
 
-  const parsed = isVND ? parseAmount(value) : parseFloat(value)
+  const isExpr = isVND && hasOperator(value)
+  const parsed = isVND
+    ? (isExpr ? parseExpression(value) : parseAmount(value))
+    : parseFloat(value)
   const valid = parsed !== null && parsed > 0 && !isNaN(parsed as number)
 
-  const preview = valid
-    ? isVND
-      ? fmtVND(parsed as number)
-      : fmtCurrency(parsed as number, currency)
-    : null
+  // Khi rời ô: tự giải biểu thức → số thuần
+  function handleBlur() {
+    if (isExpr && valid && parsed !== null) {
+      onChange(String(Math.round(parsed as number)))
+    }
+  }
+
+  const preview = (() => {
+    if (!value.trim()) return null
+    if (!valid) return { text: 'Không nhận dạng — thử: 5tr, 500k, 1.500.000', ok: false }
+    const fmt = isVND ? fmtVND(parsed as number) : fmtCurrency(parsed as number, currency)
+    if (isExpr) return { text: `${value.trim()} = ${fmt}`, ok: true }
+    return { text: `= ${fmt}`, ok: true }
+  })()
 
   return (
     <div>
@@ -39,9 +51,10 @@ export default function AmountInput({
         placeholder={placeholder ?? (isVND ? 'Số tiền (vd: 45k, 1tr5, 500.000)' : `Số tiền (${currency})`)}
         value={value}
         onChange={e => onChange(e.target.value)}
+        onBlur={handleBlur}
         inputMode={isVND ? 'text' : 'decimal'}
       />
-      {chips.length > 0 && !valid && (
+      {chips.length > 0 && !valid && !isExpr && (
         <div className="flex gap-1.5 flex-wrap mt-1.5">
           {chips.map(chip => (
             <button key={chip} type="button"
@@ -52,9 +65,9 @@ export default function AmountInput({
           ))}
         </div>
       )}
-      {value.trim() && (
-        <p className={`text-xs mt-1 px-1 ${valid ? 'text-emerald-600' : 'text-gray-400'}`}>
-          {valid ? `= ${preview}` : 'Không nhận dạng — thử: 5tr, 500k, 1.500.000'}
+      {preview && (
+        <p className={`text-xs mt-1 px-1 ${preview.ok ? 'text-emerald-600 font-medium' : 'text-gray-400'}`}>
+          {preview.text}
         </p>
       )}
     </div>

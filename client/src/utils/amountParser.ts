@@ -38,3 +38,27 @@ export function parseAmount(input: string): number | null {
 export function fmtVND(n: number): string {
   return n.toLocaleString('vi-VN') + ' ₫'
 }
+
+// Tính biểu thức kiểu "175k + 23k - 5k" → 193000
+export function parseExpression(input: string): number | null {
+  const s = input.trim()
+  if (!s) return null
+  if (!/[+\-]/.test(s)) return parseAmount(s)
+
+  // Tách theo + và - (giữ lại operator)
+  const tokens = s.split(/\s*([+\-])\s*/).map(t => t.trim()).filter(Boolean)
+  let result = 0
+  let op = '+'
+  for (const token of tokens) {
+    if (token === '+') { op = '+'; continue }
+    if (token === '-') { op = '-'; continue }
+    const val = parseAmount(token)
+    if (val === null) return null
+    result = op === '+' ? result + val : result - val
+  }
+  return result > 0 ? result : null
+}
+
+export function hasOperator(input: string): boolean {
+  return /[+\-]/.test(input.trim())
+}
